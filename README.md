@@ -29,7 +29,7 @@ Prompt and model changes are notoriously hard to review. "Looks better" isn't a 
 - **Pluggable metrics** — exact match, similarity, LLM-as-judge, and a hallucination/grounding check.
 - **Quality gate** — fail CI (exit 1) if pass rate drops below a threshold.
 - **Regression gate** — fail if the average score regresses vs. the last stored run.
-- **Provider-agnostic** — a deterministic, key-free `mock` provider for fast/free CI, plus a real `anthropic` provider.
+- **Provider-agnostic** — deterministic, key-free `mock` provider *tiers* (strong / lite / legacy) for fast/free CI and for demoing regressions, plus a real `anthropic` provider.
 
 ## Quickstart
 
@@ -50,6 +50,22 @@ pass rate : 100%  (8/8)
 avg score : 1.00
 by metric : exact_match=1.00, similarity=1.00, llm_judge=1.00, hallucination=1.00
 cost      : $0.0000
+```
+
+### Mock provider tiers
+
+The key-free mocks simulate models of different quality, so CI, offline demos,
+and the regression/trend dashboard are all meaningful without an API key:
+
+| Provider | Simulates | Behavior |
+|----------|-----------|----------|
+| `mock` / `mock-strong` | A strong current-gen model | Correct, well-formatted, grounded (100% on the golden set). |
+| `mock-lite` | A cheaper/smaller model | Right on easy facts, weaker summarization/formatting. |
+| `mock-legacy` | An older model | Fabricates instead of refusing, ignores "JSON only", misses facts. |
+
+```bash
+python cli.py run --provider mock-strong   # baseline: passes
+python cli.py run --provider mock-legacy    # regresses — great for demoing the gates
 ```
 
 ### Run against a real model
@@ -115,7 +131,7 @@ Because the `mock` provider is deterministic and needs no API key, CI is fast, f
 ```
 llmqa/
   types.py        # Pydantic models: TestCase, MetricResult, CaseResult, EvalRun
-  providers/      # base ABC + mock (key-free, deterministic) + anthropic
+  providers/      # base ABC + mock tiers (strong/lite/legacy, key-free) + anthropic
   metrics/        # base ABC + exact_match, similarity, llm_judge, hallucination
   runner.py       # load dataset, run eval (tag filtering, cost/latency capture)
   report.py       # console + Markdown reporters

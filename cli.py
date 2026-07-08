@@ -73,7 +73,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     r = sub.add_parser("run", help="Run an evaluation")
     r.add_argument("--dataset", default="datasets/qa_golden.yaml")
-    r.add_argument("--provider", default="mock", help="mock | anthropic | openai")
+    r.add_argument("--provider", default="mock",
+                   help="mock | mock-strong | mock-lite | mock-legacy | anthropic | openai")
     r.add_argument("--metrics", nargs="+",
                    default=["exact_match", "similarity", "llm_judge", "hallucination"])
     r.add_argument("--tags", nargs="*", help="Only run cases with these tags")

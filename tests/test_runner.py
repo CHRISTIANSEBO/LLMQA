@@ -25,6 +25,27 @@ def test_full_run_with_mock_passes_most():
     assert 0.0 <= run.avg_score <= 1.0
 
 
+def test_mock_tiers_differ_in_quality():
+    # The strong mock should pass the whole suite; the weaker tiers should
+    # score no higher, and at least one should genuinely regress. This is what
+    # makes the mock tiers useful for demoing the regression/trend dashboard.
+    metrics = [build_metric("exact_match"), build_metric("similarity")]
+    strong = run_eval(DATASET, get_provider("mock-strong"), metrics)
+    lite = run_eval(DATASET, get_provider("mock-lite"), metrics)
+    legacy = run_eval(DATASET, get_provider("mock-legacy"), metrics)
+
+    assert strong.pass_rate == 1.0
+    assert lite.pass_rate <= strong.pass_rate
+    assert legacy.pass_rate <= strong.pass_rate
+    # At least one weaker tier must actually fail a case (otherwise the tiers
+    # are indistinguishable and add no value).
+    assert min(lite.pass_rate, legacy.pass_rate) < 1.0
+
+
+def test_mock_alias_matches_strong():
+    assert get_provider("mock").model == get_provider("mock-strong").model
+
+
 def test_tag_filtering():
     provider = get_provider("mock")
     run = run_eval(DATASET, provider, [build_metric("exact_match")], tags=["easy"])

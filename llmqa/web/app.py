@@ -23,7 +23,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 
 from ..metrics import REGISTRY, build_metric
-from ..providers import get_provider
+from ..providers import MOCK_PROVIDERS, get_provider
 from ..runner import load_dataset, run_eval
 from ..store import DEFAULT_DB, get_run, list_runs, save_run
 
@@ -73,8 +73,9 @@ def config() -> dict:
     dataset_path = DEFAULT_DATASET
     cases = load_dataset(dataset_path)
     return {
-        "providers": ["mock"] + (["anthropic"] if os.environ.get("ANTHROPIC_API_KEY") else []),
-        "all_providers": ["mock", "anthropic"],
+        "providers": list(MOCK_PROVIDERS)
+        + (["anthropic"] if os.environ.get("ANTHROPIC_API_KEY") else []),
+        "all_providers": list(MOCK_PROVIDERS) + ["anthropic"],
         "metrics": list(REGISTRY),
         "dataset": dataset_path,
         "cases": [
