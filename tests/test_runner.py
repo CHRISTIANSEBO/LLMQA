@@ -1,9 +1,12 @@
 """End-to-end runner tests using the deterministic mock provider."""
+from pathlib import Path
+
 from llmqa.metrics import build_metric
 from llmqa.providers import get_provider
 from llmqa.runner import run_eval, load_dataset
 
-DATASET = "datasets/qa_golden.yaml"
+# Resolve relative to the repo root so tests pass regardless of CWD.
+DATASET = str(Path(__file__).resolve().parent.parent / "datasets" / "qa_golden.yaml")
 
 
 def test_dataset_loads():
