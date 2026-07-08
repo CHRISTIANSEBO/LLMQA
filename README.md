@@ -1,0 +1,124 @@
+# LLMQA — LLM Quality Assurance
+
+[![tests](https://github.com/CHRISTIANSEBO/LLMQA/actions/workflows/tests.yml/badge.svg)](https://github.com/CHRISTIANSEBO/LLMQA/actions/workflows/tests.yml)
+[![python](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org/)
+[![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+
+**LLMQA** is a lightweight evaluation harness that treats LLM outputs like software you can test. Point it at a golden dataset, pick your metrics, and get a pass/fail report — plus **CI quality gates** and **regression detection** so a model or prompt change can't silently degrade quality.
+
+It automates the kind of structured LLM evaluation and data-annotation work I've done professionally, packaged as a reusable, testable tool.
+
+## Why
+
+Prompt and model changes are notoriously hard to review. "Looks better" isn't a diff you can gate a deploy on. LLMQA turns quality into something measurable and enforceable:
+
+- **Golden dataset** of tagged Q&A cases (factual, math, structured/JSON, RAG grounding, adversarial, summarization, classification).
+- **Pluggable metrics** — exact match, similarity, LLM-as-judge, and a hallucination/grounding check.
+- **Quality gate** — fail CI (exit 1) if pass rate drops below a threshold.
+- **Regression gate** — fail if the average score regresses vs. the last stored run.
+- **Provider-agnostic** — a deterministic, key-free `mock` provider for fast/free CI, plus a real `anthropic` provider.
+
+## Quickstart
+
+```bash
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+
+# Run the full suite against the free, deterministic mock provider
+python cli.py run --provider mock
+```
+
+```
+LLMQA run — mock/mock-1
+----------------------------------------------------------------
+[PASS] capital-france         exact_match=1.00 similarity=1.00 llm_judge=1.00 hallucination=1.00
+...
+pass rate : 100%  (8/8)
+avg score : 1.00
+by metric : exact_match=1.00, similarity=1.00, llm_judge=1.00, hallucination=1.00
+cost      : $0.0000
+```
+
+### Run against a real model
+
+```bash
+export ANTHROPIC_API_KEY=sk-...
+python cli.py run --provider anthropic
+```
+
+## Usage
+
+```bash
+python cli.py run [options]
+
+  --dataset PATH             Golden dataset (default: datasets/qa_golden.yaml)
+  --provider NAME            mock | anthropic (default: mock)
+  --metrics M [M ...]        exact_match similarity llm_judge hallucination
+  --tags T [T ...]           Only run cases with these tags (e.g. rag adversarial)
+  --min-pass-rate FLOAT      Quality gate: exit 1 if pass rate is below this
+  --regression               Compare to the last stored run
+  --regression-tolerance F   Allowed avg-score drop before failing (default: 0.05)
+  --markdown PATH            Also write a Markdown report to PATH
+  --db PATH                  SQLite run history (default: llmqa_runs.db)
+  --no-store                 Don't persist this run
+```
+
+### Examples
+
+```bash
+# Only the RAG / grounding cases
+python cli.py run --provider mock --tags rag grounding
+
+# CI quality gate: fail the build if pass rate < 80%
+python cli.py run --provider mock --min-pass-rate 0.8
+
+# Regression gate: fail if avg score dropped vs the last stored run
+python cli.py run --provider mock --regression
+
+# Human-readable report artifact
+python cli.py run --provider mock --markdown report.md
+```
+
+## The CI-gate story
+
+`tests.yml` runs two things on every push:
+
+1. **Unit tests** (`pytest`) — the harness itself is tested.
+2. **Self-eval gate** — `python cli.py run --provider mock --min-pass-rate 0.8`, which exits non-zero if quality drops.
+
+Because the `mock` provider is deterministic and needs no API key, CI is fast, free, and reproducible. Swap in `--provider anthropic` (with a secret key) to gate on a real model.
+
+## Metrics
+
+| Metric | What it measures |
+|--------|------------------|
+| `exact_match` | Normalized string match, with structural JSON comparison for JSON answers. |
+| `similarity` | Token-overlap (Jaccard) similarity — swappable for embeddings later. |
+| `llm_judge` | LLM-as-judge with discrete grades + chain-of-thought; heuristic fallback on the mock provider. |
+| `hallucination` | Grounding check for cases with context; rewards correct refusals, N/A without context. |
+
+## Architecture
+
+```
+llmqa/
+  types.py        # Pydantic models: TestCase, MetricResult, CaseResult, EvalRun
+  providers/      # base ABC + mock (key-free, deterministic) + anthropic
+  metrics/        # base ABC + exact_match, similarity, llm_judge, hallucination
+  runner.py       # load dataset, run eval (tag filtering, cost/latency capture)
+  report.py       # console + Markdown reporters
+  store.py        # SQLite run history for regression/trend
+cli.py            # `run` command with quality + regression gates
+datasets/
+  qa_golden.yaml  # tagged golden Q&A cases
+tests/            # pytest suite for metrics + runner
+```
+
+## Roadmap
+
+- **Phase 1 (done):** dataset + runner + metrics + CLI + gates + tests.
+- **Phase 2:** results dashboard (FastAPI + small frontend), deployed to Railway.
+- **Phase 3:** richer failure analysis and embedding-based similarity.
+
+## License
+
+MIT © 2026 Christian Sebo
