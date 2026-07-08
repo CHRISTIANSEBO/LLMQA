@@ -64,9 +64,15 @@ def health() -> dict:
     return {
         "status": "ok",
         "version": app.version,
-        "anthropic_available": bool(os.environ.get("ANTHROPIC_API_KEY")),
-        "openai_available": bool(os.environ.get("OPENAI_API_KEY")),
-        "grok_available": bool(os.environ.get("XAI_API_KEY")),
+        "keys_detected": {
+            "ANTHROPIC_API_KEY": bool(os.environ.get("ANTHROPIC_API_KEY")),
+            "OPENAI_API_KEY": bool(os.environ.get("OPENAI_API_KEY")),
+            "XAI_API_KEY": bool(os.environ.get("XAI_API_KEY")),
+        },
+        "providers_in_config": list(MOCK_PROVIDERS)
+        + ( ["anthropic"] if os.environ.get("ANTHROPIC_API_KEY") else [] )
+        + ( ["openai"] if os.environ.get("OPENAI_API_KEY") else [] )
+        + ( ["xai"] if os.environ.get("XAI_API_KEY") else [] ),
     }
 
 
