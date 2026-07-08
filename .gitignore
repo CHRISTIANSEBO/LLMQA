@@ -29,3 +29,6 @@ llmqa_runs.db
 .DS_Store
 .idea/
 .vscode/
+
+# Environment variables (contains API keys)
+.env

@@ -10,6 +10,10 @@ from __future__ import annotations
 
 import os
 
+from dotenv import load_dotenv
+
+load_dotenv()  # load .env if present
+
 import uvicorn
 
 if __name__ == "__main__":

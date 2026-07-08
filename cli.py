@@ -9,8 +9,13 @@ Examples:
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
+
+from dotenv import load_dotenv
+
+load_dotenv()  # load .env if present
 
 from llmqa.metrics import build_metric
 from llmqa.providers import get_provider

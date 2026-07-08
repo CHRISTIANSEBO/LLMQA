@@ -6,3 +6,4 @@ uvicorn[standard]>=0.29.0
 # Optional live providers (mock runs / CI don't need a key):
 anthropic>=0.40.0
 openai>=1.0.0
+python-dotenv>=1.0.0
