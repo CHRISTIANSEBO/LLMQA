@@ -8,8 +8,6 @@ from .mock import (
     MockLiteProvider,
     MockLegacyProvider,
 )
-from .openai_provider import OpenAIProvider
-from .grok_provider import GrokProvider
 
 # Key-free mock tiers, selectable by name. `mock` aliases the strong baseline.
 MOCK_PROVIDERS = {
@@ -21,38 +19,16 @@ MOCK_PROVIDERS = {
 
 
 def get_provider(name: str) -> Provider:
-    """Return a provider instance by name.
-
-    Supports both simple names and model-specific names:
-        - "openai"               → openai + default model
-        - "openai/gpt-4o"        → openai + specific model
-        - "grok"                 → grok + default model
-        - "grok/grok-4"          → grok + specific model
-    """
-    name = name.lower().strip()
-
+    """Return a provider instance by name."""
+    name = name.lower()
     if name in MOCK_PROVIDERS:
         return MOCK_PROVIDERS[name]()
-
-    # Support "provider/model" syntax
-    if "/" in name:
-        provider_name, model = name.split("/", 1)
-    else:
-        provider_name, model = name, None
-
-    if provider_name == "anthropic":
+    if name == "anthropic":
         from .anthropic_provider import AnthropicProvider
-        return AnthropicProvider(model=model) if model else AnthropicProvider()
-    if provider_name == "openai":
-        from .openai_provider import OpenAIProvider
-        return OpenAIProvider(model=model) if model else OpenAIProvider()
-    if provider_name in ("xai", "grok"):
-        from .grok_provider import GrokProvider
-        return GrokProvider(model=model) if model else GrokProvider()
-
+        return AnthropicProvider()
     raise ValueError(
         f"Unknown provider: {name!r} "
-        f"(try mock tiers, 'anthropic', 'openai', 'grok', or 'provider/model')"
+        f"(try {', '.join(repr(k) for k in MOCK_PROVIDERS)}, 'anthropic')"
     )
 
 
@@ -64,7 +40,5 @@ __all__ = [
     "MockLiteProvider",
     "MockLegacyProvider",
     "MOCK_PROVIDERS",
-    "OpenAIProvider",
-    "GrokProvider",
     "get_provider",
 ]
