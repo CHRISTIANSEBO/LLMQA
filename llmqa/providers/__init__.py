@@ -8,6 +8,8 @@ from .mock import (
     MockLiteProvider,
     MockLegacyProvider,
 )
+from .openai_provider import OpenAIProvider
+from .grok_provider import GrokProvider
 
 # Key-free mock tiers, selectable by name. `mock` aliases the strong baseline.
 MOCK_PROVIDERS = {
@@ -21,22 +23,36 @@ MOCK_PROVIDERS = {
 def get_provider(name: str) -> Provider:
     """Return a provider instance by name.
 
-    The 'mock' tiers ('mock', 'mock-strong', 'mock-lite', 'mock-legacy') always
-    work with no API key (used in CI, offline demos, and the trend dashboard).
-    'anthropic' / 'openai' require the matching API key in the environment.
+    Supports both simple names and model-specific names:
+        - "openai"               → openai + default model
+        - "openai/gpt-4o"        → openai + specific model
+        - "grok"                 → grok + default model
+        - "grok/grok-4"          → grok + specific model
     """
-    name = name.lower()
+    name = name.lower().strip()
+
     if name in MOCK_PROVIDERS:
         return MOCK_PROVIDERS[name]()
-    if name == "anthropic":
+
+    # Support "provider/model" syntax
+    if "/" in name:
+        provider_name, model = name.split("/", 1)
+    else:
+        provider_name, model = name, None
+
+    if provider_name == "anthropic":
         from .anthropic_provider import AnthropicProvider
-        return AnthropicProvider()
-    if name == "openai":
+        return AnthropicProvider(model=model) if model else AnthropicProvider()
+    if provider_name == "openai":
         from .openai_provider import OpenAIProvider
-        return OpenAIProvider()
+        return OpenAIProvider(model=model) if model else OpenAIProvider()
+    if provider_name in ("xai", "grok"):
+        from .grok_provider import GrokProvider
+        return GrokProvider(model=model) if model else GrokProvider()
+
     raise ValueError(
         f"Unknown provider: {name!r} "
-        f"(try {', '.join(repr(k) for k in MOCK_PROVIDERS)}, 'anthropic', 'openai')"
+        f"(try mock tiers, 'anthropic', 'openai', 'grok', or 'provider/model')"
     )
 
 
@@ -48,5 +64,7 @@ __all__ = [
     "MockLiteProvider",
     "MockLegacyProvider",
     "MOCK_PROVIDERS",
+    "OpenAIProvider",
+    "GrokProvider",
     "get_provider",
 ]

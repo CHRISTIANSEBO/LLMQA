@@ -65,6 +65,8 @@ def health() -> dict:
         "status": "ok",
         "version": app.version,
         "anthropic_available": bool(os.environ.get("ANTHROPIC_API_KEY")),
+        "openai_available": bool(os.environ.get("OPENAI_API_KEY")),
+        "grok_available": bool(os.environ.get("XAI_API_KEY")),
     }
 
 
@@ -72,10 +74,18 @@ def health() -> dict:
 def config() -> dict:
     dataset_path = DEFAULT_DATASET
     cases = load_dataset(dataset_path)
+
+    real_providers = []
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        real_providers.append("anthropic")
+    if os.environ.get("OPENAI_API_KEY"):
+        real_providers.append("openai")
+    if os.environ.get("XAI_API_KEY"):
+        real_providers.append("xai")
+
     return {
-        "providers": list(MOCK_PROVIDERS)
-        + (["anthropic"] if os.environ.get("ANTHROPIC_API_KEY") else []),
-        "all_providers": list(MOCK_PROVIDERS) + ["anthropic"],
+        "providers": list(MOCK_PROVIDERS) + real_providers,
+        "all_providers": list(MOCK_PROVIDERS) + ["anthropic", "openai", "xai", "grok"],
         "metrics": list(REGISTRY),
         "dataset": dataset_path,
         "cases": [

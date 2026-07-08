@@ -81,7 +81,7 @@ python cli.py run --provider anthropic
 python cli.py run [options]
 
   --dataset PATH             Golden dataset (default: datasets/qa_golden.yaml)
-  --provider NAME            mock | anthropic (default: mock)
+  --provider NAME            mock | anthropic | openai | xai (default: mock)
   --metrics M [M ...]        exact_match similarity llm_judge hallucination
   --tags T [T ...]           Only run cases with these tags (e.g. rag adversarial)
   --min-pass-rate FLOAT      Quality gate: exit 1 if pass rate is below this
