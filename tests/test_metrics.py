@@ -23,6 +23,14 @@ def test_exact_match_json():
     assert r.passed and r.score == 1.0
 
 
+def test_exact_match_json_in_code_fence():
+    # Models routinely wrap JSON in ```json fences; we should still match.
+    m = ExactMatchMetric()
+    fenced = '```json\n{\n  "name": "Maria",\n  "age": 34\n}\n```'
+    r = m.score(_case(expected='{"name": "Maria", "age": 34}'), fenced)
+    assert r.passed and r.score == 1.0
+
+
 def test_similarity_partial():
     m = SimilarityMetric(threshold=0.3)
     high = m.score(_case(expected="the cat sat on the mat"), "a cat sat on a mat")

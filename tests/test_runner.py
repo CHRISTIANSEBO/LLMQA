@@ -32,6 +32,33 @@ def test_tag_filtering():
     assert len(run.results) >= 1
 
 
+def test_gate_metrics_scoped_pass_fail():
+    # A case that gates only on exact_match should pass even if a non-gating
+    # metric (similarity) scores low.
+    from llmqa.types import CaseResult, MetricResult
+    cr = CaseResult(
+        case_id="t",
+        gate_metrics=["exact_match"],
+        output="The capital is Paris",
+        metrics=[
+            MetricResult(metric="exact_match", score=1.0, passed=True),
+            MetricResult(metric="similarity", score=0.1, passed=False),
+        ],
+    )
+    assert cr.passed  # only exact_match gates
+
+    # With no gate_metrics, every metric must pass (backwards-compatible).
+    cr2 = CaseResult(
+        case_id="t",
+        output="x",
+        metrics=[
+            MetricResult(metric="exact_match", score=1.0, passed=True),
+            MetricResult(metric="similarity", score=0.1, passed=False),
+        ],
+    )
+    assert not cr2.passed
+
+
 def test_all_metrics_run():
     provider = get_provider("mock")
     metrics = [build_metric(n) if n in ("exact_match", "similarity")

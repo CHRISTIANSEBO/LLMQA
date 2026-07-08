@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>LLMQA — LLM Quality Assurance</title>
+<link rel="stylesheet" href="/assets/app.css" />
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">✓QA</span>
+    <div>
+      <h1>LLMQA</h1>
+      <p class="tagline">LLM Quality Assurance — evaluate models like software you can test</p>
+    </div>
+  </div>
+  <a class="gh" href="https://github.com/CHRISTIANSEBO/LLMQA" target="_blank" rel="noopener">GitHub ↗</a>
+</header>
+
+<main>
+  <section class="panel controls">
+    <h2>Run an evaluation</h2>
+    <div class="control-row">
+      <label>Provider
+        <select id="provider"></select>
+      </label>
+      <label>Tags (optional)
+        <input id="tags" type="text" placeholder="e.g. factual rag" />
+      </label>
+      <label class="checkbox">
+        <input id="store" type="checkbox" checked /> Save to history
+      </label>
+    </div>
+    <fieldset id="metrics" class="metrics">
+      <legend>Metrics</legend>
+    </fieldset>
+    <button id="runBtn" class="run">▶ Run evaluation</button>
+    <span id="status" class="status"></span>
+  </section>
+
+  <section class="cards" id="summary" hidden>
+    <div class="card"><span class="k">Pass rate</span><span class="v" id="s-pass">—</span></div>
+    <div class="card"><span class="k">Avg score</span><span class="v" id="s-score">—</span></div>
+    <div class="card"><span class="k">Model</span><span class="v small" id="s-model">—</span></div>
+    <div class="card"><span class="k">Cost</span><span class="v" id="s-cost">—</span></div>
+  </section>
+
+  <section class="panel" id="resultsPanel" hidden>
+    <h2>Case results</h2>
+    <p class="hint">Bold metric = gates this case's pass/fail. Others are informational — a case can PASS with a low non-gating score (e.g. a summary shouldn't fail on exact string match).</p>
+    <div class="table-wrap">
+      <table id="results">
+        <thead><tr><th>Case</th><th>Result</th><th>Tags</th><th class="metric-cols"></th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Quality trend</h2>
+    <div id="trend" class="trend">No history yet — run an evaluation.</div>
+    <div class="table-wrap">
+      <table id="history">
+        <thead><tr><th>#</th><th>When</th><th>Provider / model</th><th>Pass</th><th>Avg</th><th>Cost</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<footer>LLMQA v0.2 · built by Christian Sebo · automates the LLM-evaluation work I did professionally</footer>
+
+<script src="/assets/app.js"></script>
+</body>
+</html>

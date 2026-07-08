@@ -34,7 +34,15 @@ class HallucinationMetric(Metric):
             return self._result(1.0, "no context (not applicable)")
 
         # A proper "I don't know" when context lacks the answer is well-grounded.
-        refusal_markers = ("does not say", "not mentioned", "no information", "don't know", "cannot determine")
+        # Cover the natural phrasings models actually use for refusals.
+        refusal_markers = (
+            "does not say", "doesn't say",
+            "not mentioned", "no mention", "does not mention", "doesn't mention",
+            "not specified", "not stated", "not provide", "does not provide",
+            "doesn't provide", "no information", "not include", "does not include",
+            "don't know", "do not know", "cannot determine", "can't determine",
+            "cannot be determined", "not available", "isn't mentioned", "is not mentioned",
+        )
         if any(m in output.lower() for m in refusal_markers):
             return self._result(1.0, "appropriate refusal / grounded")
 

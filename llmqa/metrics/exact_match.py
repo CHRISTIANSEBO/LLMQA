@@ -12,6 +12,16 @@ def _normalize(s: str) -> str:
     return re.sub(r"\s+", " ", s.strip().lower()).rstrip(".")
 
 
+def _strip_code_fence(s: str) -> str:
+    """Remove a surrounding Markdown code fence (```json ... ```), if present.
+
+    LLMs very commonly wrap JSON/code in fences even when told not to, which
+    would otherwise break structural JSON comparison.
+    """
+    m = re.match(r"^\s*```[a-zA-Z0-9]*\s*\n?(.*?)\n?\s*```\s*$", s, re.DOTALL)
+    return m.group(1).strip() if m else s.strip()
+
+
 class ExactMatchMetric(Metric):
     """Score 1.0 if the expected answer matches or is contained in the output.
 
@@ -27,9 +37,10 @@ class ExactMatchMetric(Metric):
     def score(self, case: TestCase, output: str) -> MetricResult:
         exp, out = case.expected, output
 
-        # Structural JSON comparison when applicable.
+        # Structural JSON comparison when applicable. Strip code fences first,
+        # since models routinely wrap JSON in ```json ... ``` blocks.
         try:
-            if json.loads(exp) == json.loads(out):
+            if json.loads(exp) == json.loads(_strip_code_fence(out)):
                 return self._result(1.0, "exact JSON match")
         except (ValueError, TypeError):
             pass

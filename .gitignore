@@ -21,6 +21,10 @@ env/
 report.md
 llmqa_runs.db
 
+# Local preview artifacts
+.dash-preview.png
+*.log
+
 # OS / editor
 .DS_Store
 .idea/

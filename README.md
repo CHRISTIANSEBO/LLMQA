@@ -6,7 +6,20 @@
 
 **LLMQA** is a lightweight evaluation harness that treats LLM outputs like software you can test. Point it at a golden dataset, pick your metrics, and get a pass/fail report — plus **CI quality gates** and **regression detection** so a model or prompt change can't silently degrade quality.
 
-It automates the kind of structured LLM evaluation and data-annotation work I've done professionally, packaged as a reusable, testable tool.
+It automates the kind of structured LLM evaluation and data-annotation work I've done professionally, packaged as a reusable, testable tool — usable from the **CLI** or a **web dashboard**.
+
+## Web dashboard
+
+LLMQA ships with a FastAPI + vanilla-JS dashboard: trigger runs, see per-case pass/fail with metric breakdowns, and track a quality trend across runs. It's a single service (the API serves the built frontend), so it deploys anywhere in one process.
+
+```bash
+pip install -r requirements.txt
+python server.py            # -> http://localhost:8000
+# optional, for the live provider in the UI:
+export ANTHROPIC_API_KEY=***
+```
+
+API: `GET /api/health`, `GET /api/config`, `GET /api/history`, `GET /api/runs/{id}`, `POST /api/run`.
 
 ## Why
 
@@ -107,16 +120,33 @@ llmqa/
   runner.py       # load dataset, run eval (tag filtering, cost/latency capture)
   report.py       # console + Markdown reporters
   store.py        # SQLite run history for regression/trend
+  web/            # FastAPI app + static dashboard (single-service deploy)
 cli.py            # `run` command with quality + regression gates
+server.py         # web dashboard entrypoint (honors $PORT)
 datasets/
-  qa_golden.yaml  # tagged golden Q&A cases
-tests/            # pytest suite for metrics + runner
+  qa_golden.yaml  # tagged golden Q&A cases (with per-case gate_metrics)
+tests/            # pytest suite for metrics + runner + web API
 ```
+
+## Per-case metric gating
+
+Real eval harnesses don't fail a summarization task on exact string match. Each golden case can declare `gate_metrics` — the metric(s) that decide its pass/fail. Other metrics are still scored and shown, but are informational. Omit `gate_metrics` and every metric must pass.
+
+```yaml
+- id: summarize
+  input: "Summarize in one sentence: ..."
+  expected: "..."
+  gate_metrics: [llm_judge]   # exact_match is reported but doesn't gate
+```
+
+## Deploy
+
+Deploys as a single service (Railway-ready via `railway.json` + `nixpacks.toml`, honors `$PORT`). Set `ANTHROPIC_API_KEY` in the environment to enable the live provider; without it the dashboard still runs on the free, deterministic `mock` provider.
 
 ## Roadmap
 
 - **Phase 1 (done):** dataset + runner + metrics + CLI + gates + tests.
-- **Phase 2:** results dashboard (FastAPI + small frontend), deployed to Railway.
+- **Phase 2 (done):** per-case metric gating, live-model robustness, results dashboard (FastAPI + frontend), Railway deploy config.
 - **Phase 3:** richer failure analysis and embedding-based similarity.
 
 ## License

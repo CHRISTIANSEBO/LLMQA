@@ -1,5 +1,7 @@
+# Core runtime + web dashboard (what the deployed service needs).
 pydantic>=2.6.0
 PyYAML>=6.0
-pytest>=8.0.0
-# Optional live providers (not needed for mock runs / CI):
+fastapi>=0.110.0
+uvicorn[standard]>=0.29.0
+# Optional live providers (mock runs / CI don't need a key):
 anthropic>=0.40.0

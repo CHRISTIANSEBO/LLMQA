@@ -12,6 +12,11 @@ class TestCase(BaseModel):
     expected: str
     context: str | None = None
     tags: list[str] = Field(default_factory=list)
+    # Which metrics decide pass/fail for THIS case. Metrics not listed are
+    # still scored and reported, but do not gate the case. Empty = all metrics
+    # gate (backwards-compatible default). This mirrors real eval harnesses:
+    # you don't fail a summarization case on exact string match.
+    gate_metrics: list[str] = Field(default_factory=list)
 
 
 class MetricResult(BaseModel):
@@ -32,10 +37,28 @@ class CaseResult(BaseModel):
     metrics: list[MetricResult] = Field(default_factory=list)
     latency_ms: float = 0.0
 
+    # Metric names that gate this case's pass/fail. Empty list => every metric
+    # gates (backwards-compatible). Set from TestCase.gate_metrics by the runner.
+    gate_metrics: list[str] = Field(default_factory=list)
+
     @property
     def passed(self) -> bool:
-        """A case passes only if every metric passed."""
-        return all(m.passed for m in self.metrics) if self.metrics else False
+        """A case passes only if every *gating* metric passed.
+
+        If gate_metrics is set, only those metrics decide pass/fail; the rest
+        are informational. If it is empty, all metrics must pass.
+        """
+        if not self.metrics:
+            return False
+        gating = (
+            [m for m in self.metrics if m.metric in self.gate_metrics]
+            if self.gate_metrics
+            else self.metrics
+        )
+        # If gate_metrics named metrics that weren't run, fall back to all.
+        if not gating:
+            gating = self.metrics
+        return all(m.passed for m in gating)
 
 
 class EvalRun(BaseModel):

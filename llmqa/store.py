@@ -6,6 +6,7 @@ run against the previous baseline.
 """
 from __future__ import annotations
 
+import json
 import sqlite3
 from pathlib import Path
 
@@ -27,18 +28,23 @@ def _connect(db_path: str | Path) -> sqlite3.Connection:
             pass_rate  REAL NOT NULL,
             avg_score  REAL NOT NULL,
             cost_usd   REAL NOT NULL,
-            n_cases    INTEGER NOT NULL
+            n_cases    INTEGER NOT NULL,
+            results_json TEXT
         )
         """
     )
+    # Migrate older DBs that predate the results_json column.
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(runs)").fetchall()}
+    if "results_json" not in cols:
+        conn.execute("ALTER TABLE runs ADD COLUMN results_json TEXT")
     return conn
 
 
 def save_run(run: EvalRun, db_path: str | Path = DEFAULT_DB) -> int:
     conn = _connect(db_path)
     cur = conn.execute(
-        "INSERT INTO runs (timestamp, provider, model, dataset, pass_rate, avg_score, cost_usd, n_cases)"
-        " VALUES (?,?,?,?,?,?,?,?)",
+        "INSERT INTO runs (timestamp, provider, model, dataset, pass_rate, avg_score, cost_usd, n_cases, results_json)"
+        " VALUES (?,?,?,?,?,?,?,?,?)",
         (
             run.timestamp,
             run.provider,
@@ -48,6 +54,7 @@ def save_run(run: EvalRun, db_path: str | Path = DEFAULT_DB) -> int:
             run.avg_score,
             run.total_cost_usd,
             len(run.results),
+            run.model_dump_json(),
         ),
     )
     conn.commit()
@@ -70,4 +77,41 @@ def last_run(db_path: str | Path = DEFAULT_DB) -> dict | None:
     return {
         "timestamp": row[0], "provider": row[1], "model": row[2],
         "pass_rate": row[3], "avg_score": row[4],
+    }
+
+
+def list_runs(db_path: str | Path = DEFAULT_DB, limit: int = 50) -> list[dict]:
+    """Return recent runs (newest first) as summary dicts for the dashboard."""
+    if not Path(db_path).exists():
+        return []
+    conn = _connect(db_path)
+    rows = conn.execute(
+        "SELECT id, timestamp, provider, model, dataset, pass_rate, avg_score, cost_usd, n_cases"
+        " FROM runs ORDER BY id DESC LIMIT ?",
+        (limit,),
+    ).fetchall()
+    conn.close()
+    keys = ["id", "timestamp", "provider", "model", "dataset",
+            "pass_rate", "avg_score", "cost_usd", "n_cases"]
+    return [dict(zip(keys, r)) for r in rows]
+
+
+def get_run(run_id: int, db_path: str | Path = DEFAULT_DB) -> dict | None:
+    """Return one run's full detail (aggregates + per-case results_json)."""
+    if not Path(db_path).exists():
+        return None
+    conn = _connect(db_path)
+    row = conn.execute(
+        "SELECT id, timestamp, provider, model, dataset, pass_rate, avg_score,"
+        " cost_usd, n_cases, results_json FROM runs WHERE id = ?",
+        (run_id,),
+    ).fetchone()
+    conn.close()
+    if not row:
+        return None
+    detail = json.loads(row[9]) if row[9] else None
+    return {
+        "id": row[0], "timestamp": row[1], "provider": row[2], "model": row[3],
+        "dataset": row[4], "pass_rate": row[5], "avg_score": row[6],
+        "cost_usd": row[7], "n_cases": row[8], "detail": detail,
     }

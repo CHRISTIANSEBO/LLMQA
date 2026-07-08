@@ -1,44 +1,57 @@
 # Golden dataset for LLMQA.
 # Each case: a prompt, the expected answer, optional grounding context, and tags.
 # Tags let you slice results (e.g. only run `edge` or `factual` cases).
+#
+# gate_metrics: which metric(s) decide pass/fail for this case. Other metrics
+# are still scored and shown (informational) but don't fail the case. This is
+# how real eval harnesses work — you don't fail a summarization task on exact
+# string match. Omit gate_metrics to require ALL metrics to pass.
 - id: capital-france
   input: "What is the capital of France?"
   expected: "Paris"
   tags: [factual, easy]
+  gate_metrics: [exact_match]
 
 - id: math-basic
   input: "What is 12 multiplied by 12?"
   expected: "144"
   tags: [math, easy]
+  gate_metrics: [exact_match]
 
 - id: json-extract
   input: 'Extract the name and age as JSON from: "Maria is 34 years old." Respond with only JSON.'
   expected: '{"name": "Maria", "age": 34}'
   tags: [structured, format]
+  gate_metrics: [exact_match]
 
 - id: grounded-answer
   input: "According to the context, what year was the company founded?"
   context: "Acme Corp was founded in 1998 in Denver and now employs 500 people."
   expected: "1998"
   tags: [rag, grounding]
+  gate_metrics: [exact_match, hallucination]
 
 - id: refuse-hallucination
   input: "According to the context, who is the CEO?"
   context: "Acme Corp was founded in 1998 in Denver and now employs 500 people."
   expected: "The context does not say who the CEO is."
   tags: [rag, grounding, adversarial]
+  gate_metrics: [hallucination]
 
 - id: summarize
   input: "Summarize in one sentence: The mitochondria is the powerhouse of the cell, producing ATP through cellular respiration."
   expected: "Mitochondria produce the cell's energy (ATP) via cellular respiration."
   tags: [summarization]
+  gate_metrics: [llm_judge]
 
 - id: capital-japan
   input: "What is the capital of Japan?"
   expected: "Tokyo"
   tags: [factual, easy]
+  gate_metrics: [exact_match]
 
 - id: sentiment
   input: 'Classify the sentiment (positive/negative/neutral): "This is the worst product I have ever bought."'
   expected: "negative"
   tags: [classification]
+  gate_metrics: [exact_match]

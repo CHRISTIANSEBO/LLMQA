@@ -42,6 +42,7 @@ def run_eval(
             CaseResult(
                 case_id=case.id,
                 tags=case.tags,
+                gate_metrics=case.gate_metrics,
                 output=resp.text,
                 latency_ms=round(resp.latency_ms, 1),
                 metrics=[m.score(case, resp.text) for m in metrics],
