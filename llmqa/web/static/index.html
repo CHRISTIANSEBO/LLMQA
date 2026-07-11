@@ -35,7 +35,7 @@
     <fieldset id="metrics" class="metrics">
       <legend>Metrics</legend>
     </fieldset>
-    <button id="runBtn" class="run">▶ Run evaluation</button>
+    <button id="runBtn" class="run">Run evaluation</button>
     <span id="status" class="status"></span>
   </section>
 
@@ -49,9 +49,14 @@
   <section class="panel" id="resultsPanel" hidden>
     <h2>Case results</h2>
     <p class="hint">Bold metric = gates this case's pass/fail. Others are informational — a case can PASS with a low non-gating score (e.g. a summary shouldn't fail on exact string match).</p>
+    <div class="legend" aria-label="score legend">
+      <span class="pass"><span class="g">✓</span> pass · score ≥ 0.80</span>
+      <span class="mid"><span class="g">~</span> partial · 0.50–0.79</span>
+      <span class="fail"><span class="g">✕</span> fail · &lt; 0.50</span>
+    </div>
     <div class="table-wrap">
       <table id="results">
-        <thead><tr><th>Case</th><th>Result</th><th>Tags</th><th class="metric-cols"></th></tr></thead>
+        <thead><tr><th>Case</th><th>Result</th><th>Tags</th><th class="metric-cols">Metrics</th></tr></thead>
         <tbody></tbody>
       </table>
     </div>
