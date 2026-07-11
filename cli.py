@@ -25,7 +25,7 @@ from llmqa.store import save_run, last_run
 
 
 def cmd_run(args: argparse.Namespace) -> int:
-    provider = get_provider(args.provider)
+    provider = get_provider(args.provider, use_cache=not args.no_cache)
 
     # LLM-based metrics use the same provider as judge unless it's mock.
     judge = provider
@@ -88,6 +88,8 @@ def build_parser() -> argparse.ArgumentParser:
     r.add_argument("--regression-tolerance", type=float, default=0.05)
     r.add_argument("--db", default="llmqa_runs.db")
     r.add_argument("--no-store", action="store_true", help="Do not persist this run")
+    r.add_argument("--no-cache", action="store_true",
+                   help="Disable the in-memory response cache (forces a fresh call per case)")
     r.add_argument("--markdown", help="Write a Markdown report to this path")
     r.set_defaults(func=cmd_run)
     return p
