@@ -99,12 +99,20 @@ function computePassed(r, gate) {
   return gating.every((m) => m.passed);
 }
 
-// Map a 0..1 score to a state bucket. Color is always paired with a glyph +
-// label so the UI is readable in grayscale and for red-green colorblindness.
-function scoreState(score) {
-  if (score < 0.5) return { cls: "low", glyph: "\u2715", label: "fail" };      // ✕
-  if (score < 0.8) return { cls: "mid", glyph: "\u007e", label: "partial" };   // ~
-  return { cls: "high", glyph: "\u2713", label: "pass" };                       // ✓
+// Map a metric result to a visual state. The pass/fail glyph + label are
+// driven by the server's authoritative `m.passed` (each metric has its own
+// threshold — similarity passes at 0.30, not 0.50), so the UI can never label
+// a passing metric as "fail" or vice-versa. The score magnitude only picks a
+// color nuance: a passing-but-modest score gets a "partial" tint, never a
+// contradicting glyph. Color is always paired with a glyph + label so the UI
+// stays readable in grayscale and for red-green colorblindness.
+function scoreState(m) {
+  if (m.passed) {
+    // Strong pass vs. squeaked-by pass — both show ✓, differ only in tint.
+    const cls = m.score >= 0.8 ? "high" : "mid";
+    return { cls, glyph: "\u2713", label: cls === "high" ? "pass" : "pass (marginal)" };
+  }
+  return { cls: "low", glyph: "\u2715", label: "fail" }; // ✕
 }
 
 function renderRun(run) {
@@ -125,7 +133,7 @@ function renderRun(run) {
       const m = (r.metrics || []).find((x) => x.metric === name);
       if (!m) return `<span class="mname">${name}: —</span>`;
       const isGate = gate.size === 0 || gate.has(name);
-      const st = scoreState(m.score);
+      const st = scoreState(m);
       const gateCls = "mscore " + st.cls + (isGate ? " gate" : "");
       const title = `${name}: ${st.label}${isGate ? " (gates pass/fail)" : " (informational)"}`;
       return `<span class="${gateCls}" title="${title}"><span class="sglyph">${st.glyph}</span>${name}=${m.score.toFixed(2)}</span>`;
