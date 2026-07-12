@@ -49,6 +49,27 @@ app.add_middleware(
 )
 
 
+# Provider instances are reused across requests so the in-memory response
+# cache actually pays off for the dashboard: repeated runs of the same golden
+# cases (or a judge re-asking an identical prompt) are served from cache
+# instead of re-hitting a paid API. Without this, FastAPI would build a fresh
+# provider per /api/run call and every click would start with an empty cache.
+_PROVIDER_CACHE: dict[str, object] = {}
+
+
+def _get_cached_provider(name: str):
+    """Return a process-local, cache-enabled provider instance for ``name``.
+
+    Instances are memoized by provider name so their response cache survives
+    across requests. Errors (e.g. missing API key) are not cached.
+    """
+    provider = _PROVIDER_CACHE.get(name)
+    if provider is None:
+        provider = get_provider(name, use_cache=True)
+        _PROVIDER_CACHE[name] = provider
+    return provider
+
+
 class RunRequest(BaseModel):
     provider: str = "mock"
     metrics: list[str] = Field(
@@ -124,7 +145,7 @@ def run(req: RunRequest) -> dict:
             detail="ANTHROPIC_API_KEY not configured on the server. Use the mock provider.",
         )
     try:
-        provider = get_provider(req.provider)
+        provider = _get_cached_provider(req.provider)
     except Exception as exc:  # pragma: no cover - defensive
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
