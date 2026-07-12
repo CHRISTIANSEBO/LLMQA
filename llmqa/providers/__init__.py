@@ -30,9 +30,16 @@ def get_provider(name: str, *, use_cache: bool = True) -> Provider:
     if name == "anthropic":
         from .anthropic_provider import AnthropicProvider
         return AnthropicProvider(use_cache=use_cache)
+    if name == "openai":
+        from .openai_provider import OpenAIProvider
+        return OpenAIProvider(use_cache=use_cache)
+    if name in ("xai", "grok"):
+        from .xai_provider import XAIProvider
+        return XAIProvider(use_cache=use_cache)
     raise ValueError(
         f"Unknown provider: {name!r} "
-        f"(try {', '.join(repr(k) for k in MOCK_PROVIDERS)}, 'anthropic')"
+        f"(try {', '.join(repr(k) for k in MOCK_PROVIDERS)}, "
+        f"'anthropic', 'openai', 'xai'/'grok')"
     )
 
 
