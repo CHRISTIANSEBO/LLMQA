@@ -13,7 +13,8 @@ _OUTPUT_COST_PER_TOKEN = 4.00 / 1_000_000
 class AnthropicProvider(Provider):
     name = "anthropic"
 
-    def __init__(self, model: str = "claude-haiku-4-5-20251001") -> None:
+    def __init__(self, model: str = "claude-haiku-4-5-20251001", *, use_cache: bool = True) -> None:
+        super().__init__(use_cache=use_cache)
         api_key = os.environ.get("ANTHROPIC_API_KEY")
         if not api_key:
             raise RuntimeError(

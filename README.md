@@ -90,7 +90,21 @@ python cli.py run [options]
   --markdown PATH            Also write a Markdown report to PATH
   --db PATH                  SQLite run history (default: llmqa_runs.db)
   --no-store                 Don't persist this run
+  --no-cache                 Disable the in-memory response cache
 ```
+
+### Response cache (cost saver)
+
+Providers keep an **in-memory response cache** keyed on
+`(provider, model, prompt, context)`. Identical calls within a process are
+served from the cache instead of re-hitting a paid API — a cached hit is billed
+at `$0` and marked `cached`. This matters most for the live `anthropic` provider
+and the web dashboard, where the same golden case (or a repeated judge prompt)
+would otherwise be paid for again on every run. The dashboard reuses one
+cache-enabled provider instance per name across requests, so repeated runs
+really do hit the cache. The cache is process-local and
+never written to disk, so there's no risk of serving stale answers across
+restarts. Pass `--no-cache` to force a fresh call per case.
 
 ### Examples
 

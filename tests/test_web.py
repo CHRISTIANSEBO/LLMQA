@@ -62,3 +62,22 @@ def test_run_anthropic_without_key_is_rejected():
 def test_unknown_metric_rejected():
     r = client.post("/api/run", json={"provider": "mock", "metrics": ["nope"]})
     assert r.status_code == 400
+
+
+def test_dashboard_reuses_provider_instance_across_runs():
+    """Repeated dashboard runs must share one cache-enabled provider instance.
+
+    This is what makes the response cache actually save tokens for the
+    dashboard: without instance reuse each /api/run would start cache-empty
+    and re-hit a paid API for the same golden cases.
+    """
+    from llmqa.web import app as web_app
+
+    web_app._PROVIDER_CACHE.clear()
+    client.post("/api/run", json={"provider": "mock", "store": False})
+    first = web_app._PROVIDER_CACHE["mock"]
+    client.post("/api/run", json={"provider": "mock", "store": False})
+    second = web_app._PROVIDER_CACHE["mock"]
+
+    assert first is second, "dashboard must reuse the same provider instance"
+    assert first._use_cache is True
