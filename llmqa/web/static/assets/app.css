@@ -1,97 +1,186 @@
+/* LLMQA dashboard — "newspaper / lab-notebook" theme (light only).
+ *
+ * Design rules:
+ *  - Ink-on-paper: black text on white, hairline rules, generous whitespace.
+ *  - Newspaper hierarchy: serif display headings, small-caps section labels.
+ *  - Lab notebook: monospace for ALL data (ids, scores, costs, timestamps).
+ *  - Color is reserved strictly for TEST STATE and appears ONLY in the
+ *    per-case results table. Summary cards and the trend chart stay pure ink.
+ *  - Accessibility: state is never color-alone — always color + glyph + label,
+ *    and the shades are print-safe / WCAG-AA on white.
+ */
 :root {
-  --bg: #0d1117;
-  --panel: #161b22;
-  --panel-2: #1c2330;
-  --border: #2a3340;
-  --text: #e6edf3;
-  --muted: #8b949e;
-  --accent: #4f9cf9;
-  --accent-2: #3fb950;
-  --fail: #f85149;
-  --warn: #d29922;
+  /* Ink-on-paper base (the whole UI except the results table). */
+  --paper: #fbfbf9;        /* warm off-white, like newsprint */
+  --paper-edge: #ffffff;
+  --ink: #111111;
+  --ink-2: #333333;
+  --muted: #6b6b6b;
+  --rule: #dddad2;         /* hairline rules */
+  --rule-strong: #111111;  /* masthead / heavy rules */
+
+  /* Test-state semantics — used ONLY in the case-results table. */
+  --pass: #1a7f37;  --pass-bg: #eef6f0;
+  --warn: #92400e;  --warn-bg: #f8f2e3;   /* deep amber-brown: WCAG-AA on white */
+  --fail: #c1121f;  --fail-bg: #f9ecec;
+
+  --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman", serif;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
 }
+
 * { box-sizing: border-box; }
+/* Keep native form controls in the ink palette (no default blue accent). */
+input[type=checkbox], select { accent-color: var(--ink); }
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  background: var(--bg);
-  color: var(--text);
-  line-height: 1.5;
+  font-family: var(--sans);
+  background: var(--paper);
+  color: var(--ink);
+  line-height: 1.55;
 }
+
+/* ---- Masthead: newspaper nameplate with heavy top/bottom rules ---- */
 .topbar {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 20px 28px; border-bottom: 1px solid var(--border);
-  background: linear-gradient(180deg, #11161d, var(--bg));
+  gap: 16px; padding: 22px 28px;
+  border-bottom: 3px double var(--rule-strong);
+  background: var(--paper-edge);
 }
-.brand { display: flex; align-items: center; gap: 16px; }
+.brand { display: flex; align-items: baseline; gap: 16px; }
 .logo {
-  font-weight: 800; font-size: 20px; letter-spacing: -1px;
-  background: var(--accent-2); color: #06210f; padding: 8px 10px; border-radius: 10px;
+  font-family: var(--mono); font-weight: 700; font-size: 15px; letter-spacing: 0.5px;
+  border: 1.5px solid var(--ink); padding: 4px 8px; border-radius: 3px; align-self: center;
 }
-.topbar h1 { margin: 0; font-size: 22px; letter-spacing: -0.5px; }
-.tagline { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
-.gh { color: var(--accent); text-decoration: none; font-size: 14px; font-weight: 600; }
-.gh:hover { text-decoration: underline; }
+.topbar h1 {
+  margin: 0; font-family: var(--serif); font-weight: 700;
+  font-size: 30px; letter-spacing: -0.5px;
+}
+.tagline {
+  margin: 3px 0 0; color: var(--muted); font-size: 12px;
+  font-variant: small-caps; letter-spacing: 0.6px;
+}
+.gh { color: var(--ink); text-decoration: none; font-size: 13px; font-weight: 600;
+  font-variant: small-caps; letter-spacing: 0.5px; border-bottom: 1px solid var(--ink); }
+.gh:hover { color: var(--muted); border-bottom-color: var(--muted); }
 
-main { max-width: 1000px; margin: 0 auto; padding: 24px 20px 60px; }
+main { max-width: 1040px; margin: 0 auto; padding: 30px 22px 60px; }
+
+/* ---- Panels: understated, hairline-ruled sections ---- */
 .panel {
-  background: var(--panel); border: 1px solid var(--border);
-  border-radius: 14px; padding: 20px 22px; margin-bottom: 22px;
+  background: var(--paper-edge); border: 1px solid var(--rule);
+  border-radius: 4px; padding: 22px 24px; margin-bottom: 26px;
 }
-.panel h2 { margin: 0 0 16px; font-size: 16px; }
-.hint { margin: -8px 0 16px; color: var(--muted); font-size: 12.5px; }
+.panel h2 {
+  margin: 0 0 16px; font-family: var(--sans); font-size: 12px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 1.5px; color: var(--ink);
+  padding-bottom: 8px; border-bottom: 1px solid var(--rule);
+}
+.hint { margin: -6px 0 16px; color: var(--muted); font-size: 12.5px; font-style: italic; }
 td .mscore { margin-right: 12px; display: inline-block; }
 
-.control-row { display: flex; flex-wrap: wrap; gap: 18px; align-items: flex-end; }
-label { display: flex; flex-direction: column; font-size: 12px; color: var(--muted); gap: 6px; }
-label.checkbox { flex-direction: row; align-items: center; gap: 8px; color: var(--text); font-size: 14px; }
+.control-row { display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-end; }
+label { display: flex; flex-direction: column; font-size: 11px; color: var(--muted);
+  gap: 6px; text-transform: uppercase; letter-spacing: 0.6px; }
+label.checkbox { flex-direction: row; align-items: center; gap: 8px; color: var(--ink);
+  font-size: 13px; text-transform: none; letter-spacing: normal; }
 select, input[type=text] {
-  background: var(--panel-2); border: 1px solid var(--border); color: var(--text);
-  border-radius: 8px; padding: 8px 10px; font-size: 14px; min-width: 180px;
+  background: #fff; border: 1px solid var(--rule-strong); color: var(--ink);
+  border-radius: 3px; padding: 8px 10px; font-size: 14px; min-width: 190px;
+  font-family: var(--mono);
 }
-.metrics { border: 1px solid var(--border); border-radius: 10px; margin: 18px 0; padding: 12px 16px; }
-.metrics legend { color: var(--muted); font-size: 12px; padding: 0 6px; }
-.metrics label { flex-direction: row; align-items: center; gap: 8px; color: var(--text); font-size: 14px; display: inline-flex; margin-right: 20px; }
+select:focus, input[type=text]:focus { outline: 2px solid var(--ink); outline-offset: 1px; }
+.metrics { border: 1px solid var(--rule); border-radius: 3px; margin: 18px 0; padding: 12px 16px; }
+.metrics legend { color: var(--muted); font-size: 11px; text-transform: uppercase;
+  letter-spacing: 0.6px; padding: 0 6px; }
+.metrics label { flex-direction: row; align-items: center; gap: 8px; color: var(--ink);
+  font-size: 13px; display: inline-flex; margin-right: 20px; font-family: var(--mono);
+  text-transform: none; letter-spacing: normal; }
 
 .run {
-  background: var(--accent); color: #051428; border: none; font-weight: 700;
-  padding: 11px 20px; border-radius: 10px; font-size: 15px; cursor: pointer;
+  background: var(--ink); color: #fff; border: 1px solid var(--ink); font-weight: 700;
+  padding: 11px 22px; border-radius: 3px; font-size: 14px; cursor: pointer;
+  text-transform: uppercase; letter-spacing: 0.8px;
 }
-.run:hover { filter: brightness(1.08); }
-.run:disabled { opacity: 0.5; cursor: not-allowed; }
-.status { margin-left: 14px; color: var(--muted); font-size: 13px; }
+.run:hover { background: #000; }
+.run:disabled { opacity: 0.4; cursor: not-allowed; }
+.status { margin-left: 14px; color: var(--muted); font-size: 13px; font-family: var(--mono); }
 
-.cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 22px; }
+/* ---- Summary cards: PURE INK, no state color ---- */
+.cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0;
+  margin-bottom: 26px; border: 1px solid var(--rule-strong); border-radius: 4px; overflow: hidden; }
 .card {
-  background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
-  padding: 16px 18px; display: flex; flex-direction: column; gap: 6px;
+  background: var(--paper-edge); padding: 16px 18px;
+  display: flex; flex-direction: column; gap: 6px; border-right: 1px solid var(--rule);
 }
-.card .k { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
-.card .v { font-size: 26px; font-weight: 800; }
-.card .v.small { font-size: 15px; font-weight: 600; word-break: break-all; }
+.card:last-child { border-right: none; }
+.card .k { color: var(--muted); font-size: 10.5px; text-transform: uppercase; letter-spacing: 1px; }
+.card .v { font-family: var(--mono); font-size: 26px; font-weight: 700; color: var(--ink);
+  font-variant-numeric: tabular-nums; }
+.card .v.small { font-size: 14px; font-weight: 600; word-break: break-all; }
 
+/* ---- Results table: the only place color lives ---- */
 .table-wrap { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; font-size: 14px; }
-th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); white-space: nowrap; vertical-align: top; }
-/* The metric column can hold several scores; let it wrap instead of clipping. */
-#results td:last-child, #results th:last-child { white-space: normal; min-width: 340px; }
-th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.4px; }
-tbody tr:hover { background: var(--panel-2); }
-.badge { padding: 2px 9px; border-radius: 20px; font-size: 12px; font-weight: 700; }
-.badge.pass { background: rgba(63,185,80,0.15); color: var(--accent-2); }
-.badge.fail { background: rgba(248,81,73,0.15); color: var(--fail); }
-.tag { background: var(--panel-2); border: 1px solid var(--border); border-radius: 6px; padding: 1px 7px; font-size: 11px; color: var(--muted); margin-right: 4px; }
-.mscore { font-variant-numeric: tabular-nums; }
-.mscore.gate { font-weight: 700; }
-.mscore.low { color: var(--fail); }
-.mscore.mid { color: var(--warn); }
-.mname { color: var(--muted); font-size: 11px; }
+th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--rule);
+  white-space: nowrap; vertical-align: top; }
+#results td:last-child, #results th:last-child { white-space: normal; min-width: 300px; }
+/* Lay the per-case metric scores on a fixed 2-column grid (in a wrapper div,
+   so table-cell layout stays intact) — tidy columns, no ragged wrapping.
+   Columns size to content so mono values never clip. */
+.mgrid { display: grid; grid-template-columns: max-content max-content; gap: 2px 24px; }
+.mgrid .mscore { margin: 0; white-space: nowrap; }
+@media (max-width: 560px) { .mgrid { grid-template-columns: 1fr; } }
+th { color: var(--ink); font-weight: 700; font-size: 10.5px; text-transform: uppercase;
+  letter-spacing: 0.8px; border-bottom: 2px solid var(--rule-strong); }
+#results td:first-child, #history td { font-family: var(--mono); }
+tbody tr:hover { background: var(--paper); }
 
+/* Pass / partial / fail badge: color + GLYPH + LABEL (never color-alone). */
+.badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 9px; border-radius: 3px; font-size: 11px; font-weight: 700;
+  letter-spacing: 0.4px; font-family: var(--mono);
+}
+.badge .glyph { font-weight: 900; }
+.badge.pass { background: var(--pass-bg); color: var(--pass); box-shadow: inset 3px 0 0 var(--pass); }
+.badge.fail { background: var(--fail-bg); color: var(--fail); box-shadow: inset 3px 0 0 var(--fail); }
+
+.tag { background: var(--paper); border: 1px solid var(--rule); border-radius: 3px;
+  padding: 1px 7px; font-size: 11px; color: var(--muted); margin-right: 4px; font-family: var(--mono); }
+
+/* Metric scores: monochrome digits; a small state glyph carries the color. */
+.mscore { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--ink-2); }
+/* The gating metric decides pass/fail: bold + a faint tint so the concept
+   reads even when weight alone is easy to miss. */
+.mscore.gate { font-weight: 700; color: var(--ink);
+  background: var(--paper); border-bottom: 1.5px solid var(--rule-strong);
+  padding: 0 4px 1px; border-radius: 2px; }
+.mscore .sglyph { font-weight: 900; margin-right: 3px; }
+.mscore.high .sglyph { color: var(--pass); }
+.mscore.mid  .sglyph { color: var(--warn); }
+.mscore.low  .sglyph { color: var(--fail); }
+.mname { color: var(--muted); font-size: 11px; font-family: var(--mono); }
+
+/* Legend for the three states (accessibility affordance). */
+.legend { display: flex; flex-wrap: wrap; gap: 18px; margin: -4px 0 14px;
+  font-size: 12px; color: var(--muted); font-family: var(--mono); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend .g { font-weight: 900; }
+.legend .pass .g { color: var(--pass); }
+.legend .mid  .g { color: var(--warn); }
+.legend .fail .g { color: var(--fail); }
+
+/* ---- Trend chart: PURE INK ---- */
 .trend { margin-bottom: 16px; color: var(--muted); }
 .trend svg { width: 100%; height: 120px; }
 
-footer { text-align: center; color: var(--muted); font-size: 12px; padding: 24px; border-top: 1px solid var(--border); }
+footer { text-align: center; color: var(--muted); font-size: 12px; padding: 26px;
+  border-top: 3px double var(--rule-strong); font-variant: small-caps; letter-spacing: 0.5px; }
 
 @media (max-width: 720px) {
   .cards { grid-template-columns: repeat(2, 1fr); }
+  .card:nth-child(2) { border-right: none; }
+  .card:nth-child(1), .card:nth-child(2) { border-bottom: 1px solid var(--rule); }
+  .topbar h1 { font-size: 24px; }
 }

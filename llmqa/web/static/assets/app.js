@@ -99,19 +99,28 @@ function computePassed(r, gate) {
   return gating.every((m) => m.passed);
 }
 
-function scoreClass(score, isGate) {
-  let cls = "mscore" + (isGate ? " gate" : "");
-  if (score < 0.5) cls += " low";
-  else if (score < 0.8) cls += " mid";
-  return cls;
+// Map a metric result to a visual state. The pass/fail glyph + label are
+// driven by the server's authoritative `m.passed` (each metric has its own
+// threshold — similarity passes at 0.30, not 0.50), so the UI can never label
+// a passing metric as "fail" or vice-versa. The score magnitude only picks a
+// color nuance: a passing-but-modest score gets a "partial" tint, never a
+// contradicting glyph. Color is always paired with a glyph + label so the UI
+// stays readable in grayscale and for red-green colorblindness.
+function scoreState(m) {
+  if (m.passed) {
+    // Strong pass vs. squeaked-by pass — both show ✓, differ only in tint.
+    const cls = m.score >= 0.8 ? "high" : "mid";
+    return { cls, glyph: "\u2713", label: cls === "high" ? "pass" : "pass (marginal)" };
+  }
+  return { cls: "low", glyph: "\u2715", label: "fail" }; // ✕
 }
 
 function renderRun(run) {
   $("#summary").hidden = false;
   $("#resultsPanel").hidden = false;
   const pct = Math.round(run.pass_rate * 100);
+  // Summary cards stay pure ink by design — no state color here.
   $("#s-pass").textContent = `${pct}%`;
-  $("#s-pass").style.color = pct >= 80 ? "var(--accent-2)" : pct >= 50 ? "var(--warn)" : "var(--fail)";
   $("#s-score").textContent = run.avg_score.toFixed(2);
   $("#s-model").textContent = `${run.provider}/${run.model}`;
   $("#s-cost").textContent = "$" + (run.total_cost_usd || 0).toFixed(4);
@@ -124,15 +133,19 @@ function renderRun(run) {
       const m = (r.metrics || []).find((x) => x.metric === name);
       if (!m) return `<span class="mname">${name}: —</span>`;
       const isGate = gate.size === 0 || gate.has(name);
-      return `<span class="${scoreClass(m.score, isGate)}" title="${name}${isGate ? " (gates pass/fail)" : " (informational)"}">${name}=${m.score.toFixed(2)}</span>`;
-    }).join("  ");
+      const st = scoreState(m);
+      const gateCls = "mscore " + st.cls + (isGate ? " gate" : "");
+      const title = `${name}: ${st.label}${isGate ? " (gates pass/fail)" : " (informational)"}`;
+      return `<span class="${gateCls}" title="${title}"><span class="sglyph">${st.glyph}</span>${name}=${m.score.toFixed(2)}</span>`;
+    }).join("");
     const tags = (r.tags || []).map((t) => `<span class="tag">${t}</span>`).join("");
     const badge = r.passed !== undefined ? r.passed : computePassed(r, gate);
+    const bGlyph = badge ? "\u2713" : "\u2715";
     const tr = document.createElement("tr");
     tr.innerHTML = `<td><strong>${r.case_id}</strong></td>
-      <td><span class="badge ${badge ? "pass" : "fail"}">${badge ? "PASS" : "FAIL"}</span></td>
+      <td><span class="badge ${badge ? "pass" : "fail"}"><span class="glyph">${bGlyph}</span>${badge ? "PASS" : "FAIL"}</span></td>
       <td>${tags}</td>
-      <td>${metricCells}</td>`;
+      <td><div class="mgrid">${metricCells}</div></td>`;
     tbody.appendChild(tr);
   });
 }
@@ -171,19 +184,25 @@ function renderTrend(runs) {
     series.map((r, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(r[key]).toFixed(1)}`).join(" ");
   const dots = (key, color) =>
     series.map((r, i) => `<circle cx="${x(i).toFixed(1)}" cy="${y(r[key]).toFixed(1)}" r="3" fill="${color}"/>`).join("");
+  // Pure ink by design: pass rate = solid line, avg score = dashed line.
+  // The two series are distinguished by line style, not color.
+  const css = getComputedStyle(document.documentElement);
+  const inkColor = css.getPropertyValue("--ink").trim() || "#111111";
+  const inkColor2 = css.getPropertyValue("--ink-2").trim() || "#333333";
+  const gridColor = css.getPropertyValue("--rule").trim() || "#dddad2";
+  const mutedColor = css.getPropertyValue("--muted").trim() || "#6b6b6b";
   const gridY = [0, 0.5, 1].map((v) =>
-    `<line x1="${padX}" y1="${y(v).toFixed(1)}" x2="${W - padX}" y2="${y(v).toFixed(1)}" stroke="#2a3340" stroke-width="1"/>` +
-    `<text x="2" y="${(y(v) + 3).toFixed(1)}" fill="#8b949e" font-size="9">${v}</text>`).join("");
+    `<line x1="${padX}" y1="${y(v).toFixed(1)}" x2="${W - padX}" y2="${y(v).toFixed(1)}" stroke="${gridColor}" stroke-width="1"/>` +
+    `<text x="2" y="${(y(v) + 3).toFixed(1)}" fill="${mutedColor}" font-size="9">${v}</text>`).join("");
   el.innerHTML = `
     <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="quality trend">
       ${gridY}
-      <path d="${path("avg_score")}" fill="none" stroke="#4f9cf9" stroke-width="2.5" stroke-dasharray="5 4"/>
-      <path d="${path("pass_rate")}" fill="none" stroke="#3fb950" stroke-width="2.5"/>
-      ${dots("avg_score", "#4f9cf9")}${dots("pass_rate", "#3fb950")}
+      <path d="${path("avg_score")}" fill="none" stroke="${inkColor2}" stroke-width="2" stroke-dasharray="5 4"/>
+      <path d="${path("pass_rate")}" fill="none" stroke="${inkColor}" stroke-width="2.5"/>
+      ${dots("avg_score", inkColor2)}${dots("pass_rate", inkColor)}
     </svg>
-    <div style="font-size:12px;color:var(--muted)">
-      <span style="color:#3fb950">■</span> pass rate &nbsp;
-      <span style="color:#4f9cf9">▬</span> avg score &nbsp; (oldest → newest, ${n} runs)
+    <div style="font-size:12px;color:var(--muted);font-family:var(--mono)">
+      ―― pass rate (solid) &nbsp;&nbsp; –– avg score (dashed) &nbsp; (oldest → newest, ${n} runs)
     </div>`;
 }
 
