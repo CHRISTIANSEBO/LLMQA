@@ -15,8 +15,10 @@ LLMQA ships with a FastAPI + vanilla-JS dashboard: trigger runs, see per-case pa
 ```bash
 pip install -r requirements.txt
 python server.py            # -> http://localhost:8000
-# optional, for the live provider in the UI:
+# optional, for the live providers in the UI (any one enables that model):
 export ANTHROPIC_API_KEY=***
+export OPENAI_API_KEY=***
+export XAI_API_KEY=***
 ```
 
 API: `GET /api/health`, `GET /api/config`, `GET /api/history`, `GET /api/runs/{id}`, `POST /api/run`.
@@ -29,7 +31,7 @@ Prompt and model changes are notoriously hard to review. "Looks better" isn't a 
 - **Pluggable metrics** — exact match, similarity, LLM-as-judge, and a hallucination/grounding check.
 - **Quality gate** — fail CI (exit 1) if pass rate drops below a threshold.
 - **Regression gate** — fail if the average score regresses vs. the last stored run.
-- **Provider-agnostic** — deterministic, key-free `mock` provider *tiers* (strong / lite / legacy) for fast/free CI and for demoing regressions, plus a real `anthropic` provider.
+- **Provider-agnostic** — deterministic, key-free `mock` provider *tiers* (strong / lite / legacy) for fast/free CI and for demoing regressions, plus real `anthropic`, `openai`, and `xai` (Grok) providers.
 
 ## Quickstart
 
@@ -70,10 +72,26 @@ python cli.py run --provider mock-legacy    # regresses — great for demoing th
 
 ### Run against a real model
 
+Each live provider reads its own key from the environment and is selected by
+name. The judge for LLM-based metrics defaults to the same provider.
+
 ```bash
-export ANTHROPIC_API_KEY=sk-...
+# Anthropic Claude (default: claude-haiku-4-5)
+export ANTHROPIC_API_KEY=sk-ant-...
 python cli.py run --provider anthropic
+
+# OpenAI (default: gpt-4o-mini)
+export OPENAI_API_KEY=sk-...
+python cli.py run --provider openai
+
+# xAI Grok (default: grok-4-fast) — `grok` is an alias for `xai`
+export XAI_API_KEY=xai-...
+python cli.py run --provider xai
 ```
+
+xAI uses an OpenAI-compatible API, so it reuses the `openai` SDK against xAI's
+base URL — no extra dependency. Costs for every live provider are computed from
+the returned token usage using per-model pricing.
 
 ## Usage
 
@@ -81,7 +99,7 @@ python cli.py run --provider anthropic
 python cli.py run [options]
 
   --dataset PATH             Golden dataset (default: datasets/qa_golden.yaml)
-  --provider NAME            mock | anthropic | openai | xai (default: mock)
+  --provider NAME            mock | anthropic | openai | xai/grok (default: mock)
   --metrics M [M ...]        exact_match similarity llm_judge hallucination
   --tags T [T ...]           Only run cases with these tags (e.g. rag adversarial)
   --min-pass-rate FLOAT      Quality gate: exit 1 if pass rate is below this
@@ -145,7 +163,7 @@ Because the `mock` provider is deterministic and needs no API key, CI is fast, f
 ```
 llmqa/
   types.py        # Pydantic models: TestCase, MetricResult, CaseResult, EvalRun
-  providers/      # base ABC + mock tiers (strong/lite/legacy, key-free) + anthropic
+  providers/      # base ABC + mock tiers (key-free) + anthropic + openai + xai (Grok)
   metrics/        # base ABC + exact_match, similarity, llm_judge, hallucination
   runner.py       # load dataset, run eval (tag filtering, cost/latency capture)
   report.py       # console + Markdown reporters
@@ -171,7 +189,7 @@ Real eval harnesses don't fail a summarization task on exact string match. Each 
 
 ## Deploy
 
-Deploys as a single service (Railway-ready via `railway.json` + `nixpacks.toml`, honors `$PORT`). Set `ANTHROPIC_API_KEY` in the environment to enable the live provider; without it the dashboard still runs on the free, deterministic `mock` provider.
+Deploys as a single service (Railway-ready via `railway.json` + `nixpacks.toml`, honors `$PORT`). Set any of `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, or `XAI_API_KEY` in the environment to enable that live provider; without any key the dashboard still runs on the free, deterministic `mock` provider.
 
 ## Roadmap
 
