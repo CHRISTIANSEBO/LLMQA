@@ -49,6 +49,7 @@
   <section class="panel" id="resultsPanel" hidden>
     <h2>Case results</h2>
     <p class="hint">Bold metric = gates this case's pass/fail. Others are informational — a case can PASS with a low non-gating score (e.g. a summary shouldn't fail on exact string match).</p>
+    <div id="tagFilter" class="tag-filter-bar" aria-label="Filter by tag"></div>
     <div class="legend" aria-label="score legend">
       <span class="pass"><span class="g">✓</span> pass · score ≥ the metric's threshold</span>
       <span class="mid"><span class="g">✓</span> pass (marginal) · passed but score &lt; 0.80</span>
