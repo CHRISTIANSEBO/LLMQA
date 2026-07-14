@@ -91,7 +91,7 @@ def config() -> dict:
 
     return {
         "providers": list(MOCK_PROVIDERS) + real_providers,
-        "all_providers": list(MOCK_PROVIDERS) + ["anthropic", "openai", "xai", "grok"],
+        "all_providers": list(MOCK_PROVIDERS) + ["anthropic", "openai", "xai"],
         "metrics": list(REGISTRY),
         "dataset": dataset_path,
         "cases": [
