@@ -152,6 +152,7 @@ function appendCaseRow(r) {
   const tagSpans = (r.tags || []).map((t) => `<span class="tag">${t}</span>`).join("");
   const badge = r.passed !== undefined ? r.passed : computePassed(r, gate);
   const bGlyph = badge ? "✓" : "✕";
+  const ms = r.latency_ms != null ? `${r.latency_ms} ms` : "—";
   const tr = document.createElement("tr");
   tr.className = "result-row";
   tr.dataset.tags = JSON.stringify(r.tags || []);
@@ -161,6 +162,7 @@ function appendCaseRow(r) {
   tr.innerHTML = `<td><strong class="expand-toggle">\u25b8 ${r.case_id}</strong></td>
     <td><span class="badge ${badge ? "pass" : "fail"}"><span class="glyph">${bGlyph}</span>${badge ? "PASS" : "FAIL"}</span></td>
     <td>${tagSpans}</td>
+    <td class="latency">${ms}</td>
     <td><div class="mgrid">${metricCells}</div></td>`;
   tr.addEventListener("click", toggleDetail);
   $("#results tbody").appendChild(tr);
@@ -228,9 +230,11 @@ function renderRun(run) {
     tr.dataset.caseId = r.case_id;
     tr.dataset.output = r.output || "";
     tr.title = "Click to expand";
+    const ms = r.latency_ms != null ? `${r.latency_ms} ms` : "—";
     tr.innerHTML = `<td><strong class="expand-toggle">\u25b8 ${r.case_id}</strong></td>
       <td><span class="badge ${badge ? "pass" : "fail"}"><span class="glyph">${bGlyph}</span>${badge ? "PASS" : "FAIL"}</span></td>
       <td>${tags}</td>
+      <td class="latency">${ms}</td>
       <td><div class="mgrid">${metricCells}</div></td>`;
     tr.addEventListener("click", toggleDetail);
     tbody.appendChild(tr);
