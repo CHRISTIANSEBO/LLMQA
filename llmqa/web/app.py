@@ -141,7 +141,7 @@ def config() -> dict:
         "cases": [
             {"id": c.id, "input": c.input, "expected": c.expected,
              "tags": c.tags, "has_context": bool(c.context),
-             "gate_metrics": c.gate_metrics}
+             "context": c.context, "gate_metrics": c.gate_metrics}
             for c in cases
         ],
     }
