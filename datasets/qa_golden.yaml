@@ -55,3 +55,152 @@
   expected: "negative"
   tags: [classification]
   gate_metrics: [exact_match]
+
+# ---------------------------------------------------------------------------
+# INSTRUCTION FOLLOWING
+# ---------------------------------------------------------------------------
+- id: uppercase-response
+  input: "Respond with only the word 'yes' in uppercase."
+  expected: "YES"
+  tags: [instruction-following, format, easy]
+  gate_metrics: [exact_match]
+
+- id: exact-repeat
+  input: 'Repeat back exactly: "The quick brown fox."'
+  expected: "The quick brown fox."
+  tags: [instruction-following, edge-case]
+  gate_metrics: [exact_match]
+
+- id: format-bullet-list
+  input: "List three primary colors, one per line, lowercase, no numbering or punctuation."
+  expected: "red\nblue\nyellow"
+  tags: [instruction-following, format]
+  gate_metrics: [llm_judge]
+
+- id: word-count-constraint
+  input: "Describe what a compiler does in exactly five words."
+  expected: "Translates source code to machine code."
+  tags: [instruction-following, format, technical]
+  gate_metrics: [llm_judge]
+
+# ---------------------------------------------------------------------------
+# MATH & REASONING
+# ---------------------------------------------------------------------------
+- id: math-percentage
+  input: "A store marks up an item from $80 to $100. What is the percentage markup? Answer with just the percentage."
+  expected: "25%"
+  tags: [math, reasoning]
+  gate_metrics: [exact_match]
+
+- id: math-sequence
+  input: "What is the next number in the sequence: 2, 6, 18, 54? Answer with just the number."
+  expected: "162"
+  tags: [math, reasoning]
+  gate_metrics: [exact_match]
+
+- id: logical-deduction
+  input: "All mammals are warm-blooded. Dolphins are mammals. Are dolphins warm-blooded? Answer yes or no."
+  expected: "yes"
+  tags: [reasoning, easy]
+  gate_metrics: [exact_match]
+
+- id: negation-edge
+  input: "True or false: All birds can fly."
+  expected: "false"
+  tags: [reasoning, edge-case]
+  gate_metrics: [exact_match]
+
+- id: multi-hop-geo
+  input: "The Eiffel Tower is in Paris. Paris is the capital of France. What country is the Eiffel Tower in? Answer with just the country name."
+  expected: "France"
+  tags: [reasoning, factual, multi-hop]
+  gate_metrics: [exact_match]
+
+# ---------------------------------------------------------------------------
+# STRUCTURED OUTPUT
+# ---------------------------------------------------------------------------
+- id: json-nested
+  input: 'Parse this into JSON: "Alice, 29, works at OpenAI as an engineer." Use keys: name, age, employer, role. Respond with only valid JSON.'
+  expected: '{"name": "Alice", "age": 29, "employer": "OpenAI", "role": "engineer"}'
+  tags: [structured, format]
+  gate_metrics: [exact_match]
+
+- id: json-array-evens
+  input: "Return a JSON array of even numbers from 1 to 10 inclusive. Respond with only the JSON array."
+  expected: "[2, 4, 6, 8, 10]"
+  tags: [structured, format, math]
+  gate_metrics: [exact_match]
+
+# ---------------------------------------------------------------------------
+# RAG / GROUNDING (harder cases)
+# ---------------------------------------------------------------------------
+- id: grounded-date
+  input: "According to the context, when did the acquisition close?"
+  context: "DataBrick Inc. acquired SynthAI on March 15, 2024 in a $1.2 billion all-cash deal. The boards of both companies approved the deal in February."
+  expected: "March 15, 2024"
+  tags: [rag, grounding]
+  gate_metrics: [exact_match, hallucination]
+
+- id: grounded-headcount
+  input: "According to the context, how many positions are being eliminated?"
+  context: "Following the merger, Nexus Corp announced a restructuring that will eliminate 340 positions across its engineering and marketing divisions."
+  expected: "340"
+  tags: [rag, grounding]
+  gate_metrics: [exact_match, hallucination]
+
+- id: refuse-hallucination-revenue
+  input: "According to the context, what is the company's revenue?"
+  context: "Nexus Corp announced Q3 results today, noting strong growth in cloud services and a new partnership with three Fortune 500 companies."
+  expected: "The context does not mention revenue figures."
+  tags: [rag, grounding, adversarial]
+  gate_metrics: [hallucination]
+
+- id: refuse-hallucination-founder
+  input: "According to the context, who founded the company?"
+  context: "Veritas Health operates 12 clinics across the Pacific Northwest and was named a top employer in 2023."
+  expected: "The context does not say who founded Veritas Health."
+  tags: [rag, grounding, adversarial]
+  gate_metrics: [hallucination]
+
+- id: refuse-empty-context
+  input: "According to the context, what is the main topic?"
+  context: ""
+  expected: "The context is empty."
+  tags: [rag, edge-case, adversarial]
+  gate_metrics: [hallucination]
+
+# ---------------------------------------------------------------------------
+# CLASSIFICATION
+# ---------------------------------------------------------------------------
+- id: sentiment-positive
+  input: 'Classify the sentiment (positive/negative/neutral): "I absolutely love this product — it exceeded all my expectations!"'
+  expected: "positive"
+  tags: [classification, easy]
+  gate_metrics: [exact_match]
+
+- id: sentiment-neutral
+  input: 'Classify the sentiment (positive/negative/neutral): "The package arrived on Tuesday."'
+  expected: "neutral"
+  tags: [classification]
+  gate_metrics: [exact_match]
+
+- id: intent-classification
+  input: 'Classify the user intent (question/complaint/compliment/request): "Can you please reset my password?"'
+  expected: "request"
+  tags: [classification]
+  gate_metrics: [exact_match]
+
+# ---------------------------------------------------------------------------
+# SUMMARIZATION (harder)
+# ---------------------------------------------------------------------------
+- id: summarize-technical
+  input: "Summarize in one sentence: Transformer models use self-attention mechanisms to weigh the importance of different tokens in a sequence, enabling them to capture long-range dependencies more effectively than recurrent architectures."
+  expected: "Transformers use self-attention to capture long-range dependencies better than recurrent models."
+  tags: [summarization, technical]
+  gate_metrics: [llm_judge]
+
+- id: summarize-business
+  input: "Summarize in one sentence: Q3 revenue grew 18% year-over-year to $4.2 billion, driven by strong cloud services performance which offset a 5% decline in hardware sales. Operating margin expanded to 22%."
+  expected: "Q3 revenue rose 18% to $4.2B on cloud strength, with operating margin expanding to 22% despite declining hardware sales."
+  tags: [summarization, business]
+  gate_metrics: [llm_judge]
