@@ -85,6 +85,14 @@ def _get_cached_provider(name: str):
     return provider
 
 
+class CompareRequest(BaseModel):
+    providers: list[str] = Field(default=["mock-strong", "mock-lite"], min_length=2, max_length=4)
+    metrics: list[str] = Field(
+        default_factory=lambda: ["exact_match", "similarity", "llm_judge", "hallucination"]
+    )
+    tags: list[str] | None = None
+
+
 class RunRequest(BaseModel):
     provider: str = "mock"
     metrics: list[str] = Field(
@@ -264,6 +272,38 @@ def run_stream(req: RunRequest):
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+@app.post("/api/compare")
+def compare(req: CompareRequest) -> dict:
+    """Run the same dataset through multiple providers and return all results
+    keyed by provider name for side-by-side comparison."""
+    all_runs: dict[str, dict] = {}
+
+    for prov_name in req.providers:
+        try:
+            provider = _get_cached_provider(prov_name)
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+        metrics = []
+        for name in req.metrics:
+            if name not in REGISTRY:
+                raise HTTPException(status_code=400, detail=f"Unknown metric {name!r}")
+            if name in ("llm_judge", "hallucination"):
+                metrics.append(build_metric(name, judge=provider))
+            else:
+                metrics.append(build_metric(name))
+
+        dataset = req.tags and DEFAULT_DATASET  # tag-filter reuses dataset path
+        eval_run = run_eval(DEFAULT_DATASET, provider, metrics, tags=req.tags)
+
+        payload = eval_run.model_dump()
+        payload["pass_rate"] = eval_run.pass_rate
+        payload["avg_score"] = eval_run.avg_score
+        for case_payload, case_result in zip(payload["results"], eval_run.results):
+            case_payload["passed"] = case_result.passed
+        all_runs[prov_name] = payload
+
+    return {"runs": all_runs, "providers": req.providers}
 
 
 # --- Static frontend (mounted last so /api routes take precedence) ----------
