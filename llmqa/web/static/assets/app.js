@@ -62,28 +62,100 @@ async function runEval() {
   const btn = $("#runBtn");
   const status = $("#status");
   btn.disabled = true;
-  status.textContent = "Running… (live providers can take a few seconds)";
+
+  // Reset UI for a fresh streaming run
+  $("#summary").hidden = true;
+  $("#resultsPanel").hidden = false;
+  $("#results tbody").innerHTML = "";
+  const tagFilterBar = document.getElementById("tagFilter");
+  if (tagFilterBar) tagFilterBar.innerHTML = "";
+
+  const tags = $("#tags").value.trim().split(/\s+/).filter(Boolean);
+  const body = {
+    provider: $("#provider").value,
+    metrics: selectedMetrics(),
+    tags: tags.length ? tags : null,
+    store: $("#store").checked,
+  };
+
+  const streamedResults = [];
+  let caseCount = 0;
+
   try {
-    const tags = $("#tags").value.trim().split(/\s+/).filter(Boolean);
-    const body = {
-      provider: $("#provider").value,
-      metrics: selectedMetrics(),
-      tags: tags.length ? tags : null,
-      store: $("#store").checked,
-    };
-    const run = await api("/api/run", {
+    const resp = await fetch("/api/run/stream", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-    renderRun(run);
-    status.textContent = `Done in ${totalLatency(run)} ms`;
-    await loadHistory();
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.detail || `HTTP ${resp.status}`);
+    }
+
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      const parts = buffer.split("\n\n");
+      buffer = parts.pop();
+
+      for (const part of parts) {
+        const line = part.trim();
+        if (!line.startsWith("data: ")) continue;
+        let event;
+        try { event = JSON.parse(line.slice(6)); } catch { continue; }
+
+        if (event.type === "case") {
+          caseCount++;
+          status.textContent = `Evaluating case ${caseCount}…`;
+          streamedResults.push(event.result);
+          appendCaseRow(event.result);
+        } else if (event.type === "done") {
+          $("#summary").hidden = false;
+          const pct = Math.round(event.pass_rate * 100);
+          $("#s-pass").textContent = `${pct}%`;
+          $("#s-score").textContent = event.avg_score.toFixed(2);
+          $("#s-model").textContent = `${event.provider}/${event.model}`;
+          $("#s-cost").textContent = "$" + (event.total_cost_usd || 0).toFixed(4);
+          status.textContent = `Done — ${caseCount} cases`;
+          renderTagFilter(streamedResults);
+          await loadHistory();
+        }
+      }
+    }
   } catch (e) {
     status.textContent = "⚠ " + e.message;
   } finally {
     btn.disabled = false;
   }
+}
+
+function appendCaseRow(r) {
+  const gate = new Set(r.gate_metrics || []);
+  const metricCells = METRIC_ORDER.map((name) => {
+    const m = (r.metrics || []).find((x) => x.metric === name);
+    if (!m) return `<span class="mname">${name}: —</span>`;
+    const isGate = gate.size === 0 || gate.has(name);
+    const st = scoreState(m);
+    const gateCls = "mscore " + st.cls + (isGate ? " gate" : "");
+    const title = `${name}: ${st.label}${isGate ? " (gates pass/fail)" : " (informational)"}`;
+    return `<span class="${gateCls}" title="${title}"><span class="sglyph">${st.glyph}</span>${name}=${m.score.toFixed(2)}</span>`;
+  }).join("");
+  const tagSpans = (r.tags || []).map((t) => `<span class="tag">${t}</span>`).join("");
+  const badge = r.passed !== undefined ? r.passed : computePassed(r, gate);
+  const bGlyph = badge ? "✓" : "✕";
+  const tr = document.createElement("tr");
+  tr.dataset.tags = JSON.stringify(r.tags || []);
+  tr.innerHTML = `<td><strong>${r.case_id}</strong></td>
+    <td><span class="badge ${badge ? "pass" : "fail"}"><span class="glyph">${bGlyph}</span>${badge ? "PASS" : "FAIL"}</span></td>
+    <td>${tagSpans}</td>
+    <td><div class="mgrid">${metricCells}</div></td>`;
+  $("#results tbody").appendChild(tr);
 }
 
 function totalLatency(run) {

@@ -17,10 +17,12 @@ import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+import json as _json
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from ..metrics import REGISTRY, build_metric
@@ -185,6 +187,83 @@ def run(req: RunRequest) -> dict:
     for case_payload, case_result in zip(payload["results"], eval_run.results):
         case_payload["passed"] = case_result.passed
     return payload
+
+
+@app.post("/api/run/stream")
+def run_stream(req: RunRequest):
+    """Stream case results via Server-Sent Events as each case completes.
+
+    Each SSE event is JSON with a ``type`` field:
+    - ``{"type": "case", "result": <CaseResult>}``  — one per completed case
+    - ``{"type": "done", "pass_rate": ..., "avg_score": ..., ...}`` — final summary
+    """
+    try:
+        provider = _get_cached_provider(req.provider)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    metrics: list = []
+    for name in req.metrics:
+        if name not in REGISTRY:
+            raise HTTPException(status_code=400, detail=f"Unknown metric {name!r}")
+        if name in ("llm_judge", "hallucination"):
+            metrics.append(build_metric(name, judge=provider))
+        else:
+            metrics.append(build_metric(name))
+
+    dataset_path = req.dataset or DEFAULT_DATASET
+    store = req.store
+
+    def _event_gen():
+        from datetime import datetime, timezone
+        from ..types import CaseResult, EvalRun
+
+        cases = load_dataset(dataset_path)
+        if req.tags:
+            wanted = set(req.tags)
+            cases = [c for c in cases if wanted & set(c.tags)]
+
+        run = EvalRun(
+            dataset=dataset_path,
+            model=provider.model,
+            provider=provider.name,
+            timestamp=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        )
+
+        for case in cases:
+            resp = provider.generate(case.input, case.context)
+            run.total_cost_usd += resp.cost_usd
+            scored = [m.score(case, resp.text) for m in metrics]
+            cr = CaseResult(
+                case_id=case.id,
+                tags=case.tags,
+                gate_metrics=case.gate_metrics,
+                output=resp.text,
+                latency_ms=round(resp.latency_ms, 1),
+                metrics=scored,
+            )
+            run.results.append(cr)
+            case_data = cr.model_dump()
+            case_data["passed"] = cr.passed
+            yield f"data: {_json.dumps({'type': 'case', 'result': case_data})}\n\n"
+
+        run_id = save_run(run, DB_PATH) if store else None
+        summary = {
+            "type": "done",
+            "pass_rate": run.pass_rate,
+            "avg_score": run.avg_score,
+            "total_cost_usd": run.total_cost_usd,
+            "model": run.model,
+            "provider": run.provider,
+            "run_id": run_id,
+        }
+        yield f"data: {_json.dumps(summary)}\n\n"
+
+    return StreamingResponse(
+        _event_gen(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 # --- Static frontend (mounted last so /api routes take precedence) ----------
