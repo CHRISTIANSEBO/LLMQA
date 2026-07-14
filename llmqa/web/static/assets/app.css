@@ -195,6 +195,26 @@ tbody tr:hover { background: var(--paper); }
 .cmp-delta.neg { color: var(--fail); }
 .cmp-delta.neu { color: var(--muted); }
 
+/* Row expansion — model output vs expected */
+.result-row { cursor: pointer; }
+.result-row:hover .expand-toggle { text-decoration: underline dotted; }
+.expand-toggle { font-family: var(--mono); font-size: 13px; }
+.detail-row td.detail-cell { padding: 0; border-bottom: 2px solid var(--rule); }
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  padding: 14px 18px;
+  background: var(--paper);
+  border-top: 1px solid var(--rule);
+}
+.detail-field { display: flex; flex-direction: column; gap: 4px; }
+.dl { font-size: 10px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); font-weight: 600; font-family: var(--mono); }
+.dv { margin: 0; font-family: var(--mono); font-size: 12px; white-space: pre-wrap; word-break: break-word; line-height: 1.6; color: var(--ink); }
+.dv.out { color: var(--pass); }
+.dv.exp { color: var(--ink-2); font-style: italic; }
+.dv.ctx { color: var(--muted); }
+
 footer { text-align: center; color: var(--muted); font-size: 12px; padding: 26px;
   border-top: 3px double var(--rule-strong); font-variant: small-caps; letter-spacing: 0.5px; }
 

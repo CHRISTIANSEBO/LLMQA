@@ -7,10 +7,12 @@ const api = (path, opts) => fetch(path, opts).then(async (r) => {
 });
 
 let METRIC_ORDER = [];
+let CASE_MAP = {}; // case_id → {input, expected, context}
 
 async function init() {
   const cfg = await api("/api/config");
   METRIC_ORDER = cfg.metrics;
+  (cfg.cases || []).forEach(c => { CASE_MAP[c.id] = c; });
 
   const provSel = $("#provider");
   cfg.all_providers.forEach((p) => {
@@ -151,11 +153,16 @@ function appendCaseRow(r) {
   const badge = r.passed !== undefined ? r.passed : computePassed(r, gate);
   const bGlyph = badge ? "✓" : "✕";
   const tr = document.createElement("tr");
+  tr.className = "result-row";
   tr.dataset.tags = JSON.stringify(r.tags || []);
-  tr.innerHTML = `<td><strong>${r.case_id}</strong></td>
+  tr.dataset.caseId = r.case_id;
+  tr.dataset.output = r.output || "";
+  tr.title = "Click to expand";
+  tr.innerHTML = `<td><strong class="expand-toggle">\u25b8 ${r.case_id}</strong></td>
     <td><span class="badge ${badge ? "pass" : "fail"}"><span class="glyph">${bGlyph}</span>${badge ? "PASS" : "FAIL"}</span></td>
     <td>${tagSpans}</td>
     <td><div class="mgrid">${metricCells}</div></td>`;
+  tr.addEventListener("click", toggleDetail);
   $("#results tbody").appendChild(tr);
 }
 
@@ -216,11 +223,16 @@ function renderRun(run) {
     const badge = r.passed !== undefined ? r.passed : computePassed(r, gate);
     const bGlyph = badge ? "\u2713" : "\u2715";
     const tr = document.createElement("tr");
+    tr.className = "result-row";
     tr.dataset.tags = JSON.stringify(r.tags || []);
-    tr.innerHTML = `<td><strong>${r.case_id}</strong></td>
+    tr.dataset.caseId = r.case_id;
+    tr.dataset.output = r.output || "";
+    tr.title = "Click to expand";
+    tr.innerHTML = `<td><strong class="expand-toggle">\u25b8 ${r.case_id}</strong></td>
       <td><span class="badge ${badge ? "pass" : "fail"}"><span class="glyph">${bGlyph}</span>${badge ? "PASS" : "FAIL"}</span></td>
       <td>${tags}</td>
       <td><div class="mgrid">${metricCells}</div></td>`;
+    tr.addEventListener("click", toggleDetail);
     tbody.appendChild(tr);
   });
 }
@@ -428,5 +440,41 @@ function badgeHtml(passed) {
   return `<span class="badge ${passed ? 'pass' : 'fail'}"><span class="glyph">${g}</span>${passed ? 'PASS' : 'FAIL'}</span>`;
 }
 // -------------------------------------------------------------------------
+
+
+function esc(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function toggleDetail(e) {
+  const tr = e.currentTarget;
+  const caseId = tr.dataset.caseId;
+  const output = tr.dataset.output;
+  const c = CASE_MAP[caseId] || {};
+  const toggle = tr.querySelector(".expand-toggle");
+
+  const next = tr.nextElementSibling;
+  if (next && next.classList.contains("detail-row")) {
+    next.remove();
+    tr.classList.remove("expanded");
+    if (toggle) toggle.innerHTML = `\u25b8 ${caseId}`;
+    return;
+  }
+
+  const detail = document.createElement("tr");
+  detail.className = "detail-row";
+  const ctx = c.has_context ? `<div class="detail-field"><span class="dl">Context</span><pre class="dv ctx">${esc(c.context || "—")}</pre></div>` : "";
+  detail.innerHTML = `<td colspan="4" class="detail-cell">
+    <div class="detail-grid">
+      <div class="detail-field"><span class="dl">Input</span><pre class="dv">${esc(c.input || "—")}</pre></div>
+      ${ctx}
+      <div class="detail-field"><span class="dl">Model output</span><pre class="dv out">${esc(output || "—")}</pre></div>
+      <div class="detail-field"><span class="dl">Expected</span><pre class="dv exp">${esc(c.expected || "—")}</pre></div>
+    </div>
+  </td>`;
+  tr.after(detail);
+  tr.classList.add("expanded");
+  if (toggle) toggle.innerHTML = `\u25be ${caseId}`;
+}
 
 init().catch((e) => { $("#status").textContent = "Init error: " + e.message; });
