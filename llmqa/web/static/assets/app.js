@@ -30,6 +30,7 @@ async function init() {
   });
 
   $("#runBtn").addEventListener("click", runEval);
+  initCompare(cfg.all_providers);
   await loadHistory();
   await loadLatestRun();
 }
@@ -333,5 +334,99 @@ function renderTrend(runs) {
       ―― pass rate (solid) &nbsp;&nbsp; –– avg score (dashed) &nbsp; (oldest → newest, ${n} runs)
     </div>`;
 }
+
+// ---- Provider comparison -----------------------------------------------
+function initCompare(allProviders) {
+  const selA = document.getElementById("cmp-a");
+  const selB = document.getElementById("cmp-b");
+  if (!selA || !selB) return;
+
+  allProviders.forEach((p, i) => {
+    [selA, selB].forEach((sel) => {
+      const opt = document.createElement("option");
+      opt.value = p;
+      opt.textContent = p;
+      sel.appendChild(opt);
+    });
+  });
+  // Default: strong vs lite for an instant meaningful comparison.
+  selA.value = allProviders.includes("mock-strong") ? "mock-strong" : allProviders[0];
+  selB.value = allProviders.includes("mock-lite")   ? "mock-lite"   : allProviders[1] || allProviders[0];
+
+  document.getElementById("cmpBtn").addEventListener("click", runCompare);
+}
+
+async function runCompare() {
+  const btn = document.getElementById("cmpBtn");
+  const status = document.getElementById("cmp-status");
+  const provA = document.getElementById("cmp-a").value;
+  const provB = document.getElementById("cmp-b").value;
+  btn.disabled = true;
+  status.textContent = "Running both providers…";
+
+  try {
+    const data = await api("/api/compare", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ providers: [provA, provB] }),
+    });
+    renderComparison(data);
+    status.textContent = "";
+  } catch (e) {
+    status.textContent = "\u26a0 " + e.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function renderComparison({ runs, providers }) {
+  const [pA, pB] = providers;
+  const runA = runs[pA], runB = runs[pB];
+  const allCases = (runA.results || []).map(r => r.case_id);
+
+  // Summary bar
+  const sumEl = document.getElementById("cmp-summary");
+  const fmt = (r, p) => `<span class="cmp-pill"><strong>${p}</strong> &nbsp; pass ${Math.round(r.pass_rate*100)}% &nbsp; avg ${r.avg_score.toFixed(2)}</span>`;
+  sumEl.innerHTML = fmt(runA, pA) + "<span class='cmp-vs'>vs</span>" + fmt(runB, pB);
+
+  // Table
+  const head = document.getElementById("cmp-head");
+  head.innerHTML = `<th>Case</th><th>${pA}</th><th>${pB}</th><th>Delta</th>`;
+
+  const body = document.getElementById("cmp-body");
+  body.innerHTML = "";
+  allCases.forEach(cid => {
+    const rA = (runA.results || []).find(r => r.case_id === cid);
+    const rB = (runB.results || []).find(r => r.case_id === cid);
+    if (!rA || !rB) return;
+
+    const scoreA = avgScore(rA), scoreB = avgScore(rB);
+    const delta = scoreB - scoreA;
+    const passA = rA.passed, passB = rB.passed;
+    const flip = passA !== passB;
+
+    const tr = document.createElement("tr");
+    if (flip) tr.className = "cmp-flip";
+    tr.innerHTML = `
+      <td><strong>${cid}</strong></td>
+      <td>${badgeHtml(passA)} <span class="cmp-score">${scoreA.toFixed(2)}</span></td>
+      <td>${badgeHtml(passB)} <span class="cmp-score">${scoreB.toFixed(2)}</span></td>
+      <td class="cmp-delta ${delta > 0 ? 'pos' : delta < 0 ? 'neg' : 'neu'}">${delta >= 0 ? '+' : ''}${delta.toFixed(2)}</td>`;
+    body.appendChild(tr);
+  });
+
+  document.getElementById("cmp-results").hidden = false;
+}
+
+function avgScore(r) {
+  const scores = (r.metrics || []).map(m => m.score);
+  return scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
+}
+
+function badgeHtml(passed) {
+  const g = passed ? "\u2713" : "\u2715";
+  return `<span class="badge ${passed ? 'pass' : 'fail'}"><span class="glyph">${g}</span>${passed ? 'PASS' : 'FAIL'}</span>`;
+}
+// -------------------------------------------------------------------------
 
 init().catch((e) => { $("#status").textContent = "Init error: " + e.message; });

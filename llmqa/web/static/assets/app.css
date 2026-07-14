@@ -178,11 +178,22 @@ tbody tr:hover { background: var(--paper); }
 /* Tag filter bar */
 .tag-filter-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 14px; min-height: 28px; }
 .tf-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-right: 2px; }
-.tf-btn { background: var(--panel-2); border: 1px solid var(--border); color: var(--muted); border-radius: 6px; padding: 2px 10px; font-size: 12px; cursor: pointer; transition: background 0.1s, color 0.1s; }
-.tf-btn:hover { border-color: var(--accent); color: var(--text); }
-.tf-btn.active { background: var(--accent); border-color: var(--accent); color: #051428; font-weight: 700; }
-.tf-clear { background: none; border: none; color: var(--muted); font-size: 11px; cursor: pointer; text-decoration: underline dotted; padding: 0 4px; }
-.tf-clear:hover { color: var(--text); }
+.tf-btn { background: var(--paper); border: 1px solid var(--rule); color: var(--muted); border-radius: 3px; padding: 2px 10px; font-size: 12px; cursor: pointer; font-family: var(--mono); transition: border-color 0.1s, color 0.1s; }
+.tf-btn:hover { border-color: var(--ink); color: var(--ink); }
+.tf-btn.active { background: var(--ink); border-color: var(--ink); color: #fff; font-weight: 700; }
+.tf-clear { background: none; border: none; color: var(--muted); font-size: 11px; cursor: pointer; text-decoration: underline dotted; padding: 0 4px; font-family: var(--mono); }
+.tf-clear:hover { color: var(--ink); }
+
+/* Provider comparison */
+.cmp-summary { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
+.cmp-pill { background: var(--paper); border: 1px solid var(--rule); border-radius: 3px; padding: 8px 14px; font-size: 13px; font-family: var(--mono); }
+.cmp-vs { color: var(--muted); font-size: 13px; font-style: italic; }
+#cmp-table .cmp-flip { background: var(--warn-bg); }
+.cmp-score { color: var(--muted); font-size: 12px; font-family: var(--mono); }
+.cmp-delta { font-family: var(--mono); font-variant-numeric: tabular-nums; font-weight: 700; }
+.cmp-delta.pos { color: var(--pass); }
+.cmp-delta.neg { color: var(--fail); }
+.cmp-delta.neu { color: var(--muted); }
 
 footer { text-align: center; color: var(--muted); font-size: 12px; padding: 26px;
   border-top: 3px double var(--rule-strong); font-variant: small-caps; letter-spacing: 0.5px; }

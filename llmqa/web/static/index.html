@@ -64,6 +64,30 @@
     </div>
   </section>
 
+  <section class="panel" id="comparePanel">
+    <h2>Compare providers</h2>
+    <p class="hint">Run the same dataset through two providers side-by-side and see exactly where they diverge.</p>
+    <div class="control-row">
+      <label>Provider A
+        <select id="cmp-a"></select>
+      </label>
+      <label>Provider B
+        <select id="cmp-b"></select>
+      </label>
+      <button id="cmpBtn" class="run">Compare</button>
+      <span id="cmp-status" class="status"></span>
+    </div>
+    <div id="cmp-results" hidden>
+      <div class="cmp-summary" id="cmp-summary"></div>
+      <div class="table-wrap">
+        <table id="cmp-table">
+          <thead><tr id="cmp-head"></tr></thead>
+          <tbody id="cmp-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
   <section class="panel">
     <h2>Quality trend</h2>
     <div id="trend" class="trend">No history yet — run an evaluation.</div>
