@@ -199,6 +199,7 @@ function renderRun(run) {
 
   const tbody = $("#results tbody");
   tbody.innerHTML = "";
+  renderTagFilter(run.results);
   (run.results || []).forEach((r) => {
     const gate = new Set(r.gate_metrics || []);
     const metricCells = METRIC_ORDER.map((name) => {
@@ -214,6 +215,7 @@ function renderRun(run) {
     const badge = r.passed !== undefined ? r.passed : computePassed(r, gate);
     const bGlyph = badge ? "\u2713" : "\u2715";
     const tr = document.createElement("tr");
+    tr.dataset.tags = JSON.stringify(r.tags || []);
     tr.innerHTML = `<td><strong>${r.case_id}</strong></td>
       <td><span class="badge ${badge ? "pass" : "fail"}"><span class="glyph">${bGlyph}</span>${badge ? "PASS" : "FAIL"}</span></td>
       <td>${tags}</td>
@@ -221,6 +223,60 @@ function renderRun(run) {
     tbody.appendChild(tr);
   });
 }
+
+// ---- Tag filter -------------------------------------------------------
+let _activeTagFilters = new Set();
+
+function renderTagFilter(results) {
+  const bar = document.getElementById("tagFilter");
+  if (!bar) return;
+  const allTags = new Set();
+  (results || []).forEach(r => (r.tags || []).forEach(t => allTags.add(t)));
+  bar.innerHTML = "";
+  _activeTagFilters.clear();
+  if (!allTags.size) return;
+
+  const label = document.createElement("span");
+  label.className = "tf-label";
+  label.textContent = "Filter:";
+  bar.appendChild(label);
+
+  allTags.forEach(tag => {
+    const btn = document.createElement("button");
+    btn.className = "tag tf-btn";
+    btn.textContent = tag;
+    btn.dataset.tag = tag;
+    btn.addEventListener("click", () => {
+      if (_activeTagFilters.has(tag)) _activeTagFilters.delete(tag);
+      else _activeTagFilters.add(tag);
+      btn.classList.toggle("active", _activeTagFilters.has(tag));
+      applyTagFilter();
+    });
+    bar.appendChild(btn);
+  });
+
+  const clearBtn = document.createElement("button");
+  clearBtn.className = "tf-clear";
+  clearBtn.textContent = "clear";
+  clearBtn.addEventListener("click", () => {
+    _activeTagFilters.clear();
+    bar.querySelectorAll(".tf-btn").forEach(b => b.classList.remove("active"));
+    applyTagFilter();
+  });
+  bar.appendChild(clearBtn);
+}
+
+function applyTagFilter() {
+  document.querySelectorAll("#results tbody tr").forEach(tr => {
+    if (tr.classList.contains("detail-row")) return; // handled with parent
+    const tags = (tr.dataset.tags ? JSON.parse(tr.dataset.tags) : []);
+    const show = !_activeTagFilters.size || tags.some(t => _activeTagFilters.has(t));
+    tr.hidden = !show;
+    const next = tr.nextElementSibling;
+    if (next && next.classList.contains("detail-row")) next.hidden = !show;
+  });
+}
+// ------------------------------------------------------------------------
 
 async function loadHistory() {
   const { runs } = await api("/api/history?limit=30");
