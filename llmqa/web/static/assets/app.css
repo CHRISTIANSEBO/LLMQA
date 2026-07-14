@@ -215,6 +215,8 @@ tbody tr:hover { background: var(--paper); }
 .dv.exp { color: var(--ink-2); font-style: italic; }
 .dv.ctx { color: var(--muted); }
 
+td.latency { color: var(--muted); font-size: 13px; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
 footer { text-align: center; color: var(--muted); font-size: 12px; padding: 26px;
   border-top: 3px double var(--rule-strong); font-variant: small-caps; letter-spacing: 0.5px; }
 
