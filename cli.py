@@ -21,7 +21,7 @@ from llmqa.metrics import build_metric
 from llmqa.providers import get_provider
 from llmqa.report import to_console, to_markdown
 from llmqa.runner import run_eval
-from llmqa.store import save_run, last_run
+from llmqa.store import save_run, latest_run
 
 
 def cmd_run(args: argparse.Namespace) -> int:
@@ -36,7 +36,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         else:
             metrics.append(build_metric(name))
 
-    baseline = last_run(args.db) if args.regression else None
+    baseline = latest_run(args.db) if args.regression else None
 
     run = run_eval(args.dataset, provider, metrics, tags=args.tags)
     print(to_console(run))
