@@ -20,15 +20,24 @@ from .base import Provider
 
 # Prompt-substring -> answer. The "strong" model is the correct baseline; the
 # weaker variants override individual entries to introduce realistic failures.
+# Keys are lowercased substrings of the prompt; first match wins.
 _STRONG: dict[str, str] = {
-    "capital of france": "Paris",
-    "12 multiplied by 12": "144",
-    "maria is 34": '{"name": "Maria", "age": 34}',
+    # easy
+    "capital of france":          "Paris",
+    "12 multiplied by 12":        "144",
+    "reply with only the word 'yes'": "YES",
+    # medium
+    "worst product":              "negative",
+    "maria is 34":                '{"name": "Maria", "age": 34}',
+    "dolphins are mammals":       "yes",
+    "all birds can fly":          "false",
+    # hard — RAG
     "year was the company founded": "1998",
-    "who is the ceo": "The context does not say who the CEO is.",
-    "mitochondria": "Mitochondria produce the cell's energy (ATP) via cellular respiration.",
-    "capital of japan": "Tokyo",
-    "worst product": "negative",
+    "who is the ceo":             "The context does not say who the CEO is.",
+    "company's revenue":          "The context does not mention revenue figures.",
+    # hard — summarization
+    "mitochondria":               "Mitochondria produce the cell's energy (ATP) via cellular respiration.",
+    "transformer models":         "Transformers use self-attention to capture long-range dependencies better than recurrent models.",
 }
 
 
@@ -60,22 +69,27 @@ MockProvider = MockStrongProvider
 
 
 class MockLiteProvider(_CannedMock):
-    """A cheaper/smaller model: right on easy facts, weaker on hard cases.
+    """A cheaper/smaller model: right on easy facts, weaker on harder cases.
 
     Realistic small-model failure modes: verbose answers that still contain
-    the fact (fine), a wrong classification label, and shakier summarization.
+    the fact (passes contains-check), wrong format on strict cases, shakier
+    summarization, and occasional hallucination on ungrounded RAG.
     """
 
     model = "mock-lite-1"
     _answers = {
         **_STRONG,
-        # Verbose but still correct on easy facts.
+        # Verbose but correct on easy factual — still passes contains-check.
         "capital of france": "The capital of France is Paris.",
-        "capital of japan": "That would be Tokyo, the capital of Japan.",
-        # Small models often botch strict sentiment labels.
-        "worst product": "This review is clearly quite negative.",
-        # Weaker paraphrase on summarization.
-        "mitochondria": "The mitochondria makes energy for the cell.",
+        # Fails strict one-word sentiment — adds explanation.
+        "worst product":    "This review is clearly quite negative in tone.",
+        # Fails strict YES — adds surrounding words.
+        "reply with only the word 'yes'": "Yes, that's correct.",
+        # Weaker summarization paraphrase.
+        "mitochondria": "The mitochondria makes energy for the cell through respiration.",
+        "transformer models": "Transformers use attention to handle sequences better than RNNs.",
+        # Shaky on ungrounded RAG — partial refusal that still leaks fabrication.
+        "company's revenue": "Revenue is not clearly stated, though growth was strong.",
     }
 
 
@@ -83,7 +97,8 @@ class MockLegacyProvider(_CannedMock):
     """An older model: fabricates instead of refusing, ignores format rules.
 
     Realistic legacy failure modes: hallucinates a CEO instead of refusing,
-    ignores the "respond with only JSON" instruction, and misses a fact.
+    ignores the \u201creply with only JSON\u201d instruction, gets easy facts wrong,
+    and fails logical-deduction edge cases.
     """
 
     model = "mock-legacy-1"
@@ -91,8 +106,13 @@ class MockLegacyProvider(_CannedMock):
         **_STRONG,
         # Hallucination: invents a CEO instead of refusing on ungrounded RAG.
         "who is the ceo": "The CEO is Jonathan Meyers, based in the Zurich office.",
-        # Format failure: wraps JSON in prose instead of returning only JSON.
-        "maria is 34": 'Sure! Here is the data: name is Maria and age is 34.',
-        # Factual error on an easy case.
-        "capital of japan": "Kyoto",
+        # Hallucination: makes up revenue figures.
+        "company's revenue": "Revenue was approximately $4.2 billion last quarter.",
+        # Format failure: wraps JSON in prose.
+        "maria is 34": "Sure! The name is Maria and the age is 34.",
+        # Fails negation edge case.
+        "all birds can fly": "true",
+        # Weak summarization.
+        "mitochondria": "Mitochondria are important parts of cells.",
+        "transformer models": "Transformers are a type of neural network used in AI.",
     }
