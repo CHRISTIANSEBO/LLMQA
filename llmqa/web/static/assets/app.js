@@ -138,7 +138,8 @@ async function runEval() {
   }
 }
 
-function appendCaseRow(r) {
+/** Build a result <tr> for one case — shared by renderRun and appendCaseRow. */
+function buildResultRow(r) {
   const gate = new Set(r.gate_metrics || []);
   const metricCells = METRIC_ORDER.map((name) => {
     const m = (r.metrics || []).find((x) => x.metric === name);
@@ -151,8 +152,8 @@ function appendCaseRow(r) {
   }).join("");
   const tagSpans = (r.tags || []).map((t) => `<span class="tag">${t}</span>`).join("");
   const badge = r.passed !== undefined ? r.passed : computePassed(r, gate);
-  const bGlyph = badge ? "✓" : "✕";
-  const ms = r.latency_ms != null ? `${r.latency_ms} ms` : "—";
+  const bGlyph = badge ? "\u2713" : "\u2715";
+  const ms = r.latency_ms != null ? `${r.latency_ms} ms` : "\u2014";
   const tr = document.createElement("tr");
   tr.className = "result-row";
   tr.dataset.tags = JSON.stringify(r.tags || []);
@@ -165,7 +166,11 @@ function appendCaseRow(r) {
     <td class="latency">${ms}</td>
     <td><div class="mgrid">${metricCells}</div></td>`;
   tr.addEventListener("click", toggleDetail);
-  $("#results tbody").appendChild(tr);
+  return tr;
+}
+
+function appendCaseRow(r) {
+  $("#results tbody").appendChild(buildResultRow(r));
 }
 
 function totalLatency(run) {
@@ -210,35 +215,7 @@ function renderRun(run) {
   const tbody = $("#results tbody");
   tbody.innerHTML = "";
   renderTagFilter(run.results);
-  (run.results || []).forEach((r) => {
-    const gate = new Set(r.gate_metrics || []);
-    const metricCells = METRIC_ORDER.map((name) => {
-      const m = (r.metrics || []).find((x) => x.metric === name);
-      if (!m) return `<span class="mname">${name}: —</span>`;
-      const isGate = gate.size === 0 || gate.has(name);
-      const st = scoreState(m);
-      const gateCls = "mscore " + st.cls + (isGate ? " gate" : "");
-      const title = `${name}: ${st.label}${isGate ? " (gates pass/fail)" : " (informational)"}`;
-      return `<span class="${gateCls}" title="${title}"><span class="sglyph">${st.glyph}</span>${name}=${m.score.toFixed(2)}</span>`;
-    }).join("");
-    const tags = (r.tags || []).map((t) => `<span class="tag">${t}</span>`).join("");
-    const badge = r.passed !== undefined ? r.passed : computePassed(r, gate);
-    const bGlyph = badge ? "\u2713" : "\u2715";
-    const tr = document.createElement("tr");
-    tr.className = "result-row";
-    tr.dataset.tags = JSON.stringify(r.tags || []);
-    tr.dataset.caseId = r.case_id;
-    tr.dataset.output = r.output || "";
-    tr.title = "Click to expand";
-    const ms = r.latency_ms != null ? `${r.latency_ms} ms` : "—";
-    tr.innerHTML = `<td><strong class="expand-toggle">\u25b8 ${r.case_id}</strong></td>
-      <td><span class="badge ${badge ? "pass" : "fail"}"><span class="glyph">${bGlyph}</span>${badge ? "PASS" : "FAIL"}</span></td>
-      <td>${tags}</td>
-      <td class="latency">${ms}</td>
-      <td><div class="mgrid">${metricCells}</div></td>`;
-    tr.addEventListener("click", toggleDetail);
-    tbody.appendChild(tr);
-  });
+  (run.results || []).forEach((r) => tbody.appendChild(buildResultRow(r)));
 }
 
 // ---- Tag filter -------------------------------------------------------
