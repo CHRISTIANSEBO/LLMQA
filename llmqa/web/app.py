@@ -27,7 +27,7 @@ from pydantic import BaseModel, Field
 
 from ..metrics import REGISTRY, build_metric
 from ..providers import MOCK_PROVIDERS, get_provider
-from ..runner import load_dataset, run_eval
+from ..runner import iter_eval, load_dataset, run_eval
 from ..seed import seed_if_empty
 from ..store import DEFAULT_DB, get_run, list_runs, save_run
 
@@ -223,46 +223,20 @@ def run_stream(req: RunRequest):
     store = req.store
 
     def _event_gen():
-        from datetime import datetime, timezone
-        from ..types import CaseResult, EvalRun
-
-        cases = load_dataset(dataset_path)
-        if req.tags:
-            wanted = set(req.tags)
-            cases = [c for c in cases if wanted & set(c.tags)]
-
-        run = EvalRun(
-            dataset=dataset_path,
-            model=provider.model,
-            provider=provider.name,
-            timestamp=datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        )
-
-        for case in cases:
-            resp = provider.generate(case.input, case.context)
-            run.total_cost_usd += resp.cost_usd
-            scored = [m.score(case, resp.text) for m in metrics]
-            cr = CaseResult(
-                case_id=case.id,
-                tags=case.tags,
-                gate_metrics=case.gate_metrics,
-                output=resp.text,
-                latency_ms=round(resp.latency_ms, 1),
-                metrics=scored,
-            )
-            run.results.append(cr)
+        run = None
+        for run, cr in iter_eval(dataset_path, provider, metrics, req.tags):
             case_data = cr.model_dump()
             case_data["passed"] = cr.passed
             yield f"data: {_json.dumps({'type': 'case', 'result': case_data})}\n\n"
 
-        run_id = save_run(run, DB_PATH) if store else None
+        run_id = save_run(run, DB_PATH) if (store and run is not None) else None
         summary = {
             "type": "done",
-            "pass_rate": run.pass_rate,
-            "avg_score": run.avg_score,
-            "total_cost_usd": run.total_cost_usd,
-            "model": run.model,
-            "provider": run.provider,
+            "pass_rate": run.pass_rate if run else 0.0,
+            "avg_score": run.avg_score if run else 0.0,
+            "total_cost_usd": run.total_cost_usd if run else 0.0,
+            "model": provider.model,
+            "provider": provider.name,
             "run_id": run_id,
         }
         yield f"data: {_json.dumps(summary)}\n\n"
