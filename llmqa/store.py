@@ -16,7 +16,7 @@ DEFAULT_DB = "llmqa_runs.db"
 
 
 def _connect(db_path: str | Path) -> sqlite3.Connection:
-    conn = sqlite3.connect(db_path)
+    conn = sqlite3.connect(str(db_path), check_same_thread=False)
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS runs (
@@ -37,41 +37,46 @@ def _connect(db_path: str | Path) -> sqlite3.Connection:
     cols = {r[1] for r in conn.execute("PRAGMA table_info(runs)").fetchall()}
     if "results_json" not in cols:
         conn.execute("ALTER TABLE runs ADD COLUMN results_json TEXT")
+    conn.commit()
     return conn
 
 
 def save_run(run: EvalRun, db_path: str | Path = DEFAULT_DB) -> int:
     conn = _connect(db_path)
-    cur = conn.execute(
-        "INSERT INTO runs (timestamp, provider, model, dataset, pass_rate, avg_score, cost_usd, n_cases, results_json)"
-        " VALUES (?,?,?,?,?,?,?,?,?)",
-        (
-            run.timestamp,
-            run.provider,
-            run.model,
-            run.dataset,
-            run.pass_rate,
-            run.avg_score,
-            run.total_cost_usd,
-            len(run.results),
-            run.model_dump_json(),
-        ),
-    )
-    conn.commit()
-    run_id = cur.lastrowid
-    conn.close()
-    return run_id
+    try:
+        cur = conn.execute(
+            "INSERT INTO runs (timestamp, provider, model, dataset, pass_rate, avg_score,"
+            " cost_usd, n_cases, results_json) VALUES (?,?,?,?,?,?,?,?,?)",
+            (
+                run.timestamp,
+                run.provider,
+                run.model,
+                run.dataset,
+                run.pass_rate,
+                run.avg_score,
+                run.total_cost_usd,
+                len(run.results),
+                run.model_dump_json(),
+            ),
+        )
+        conn.commit()
+        return cur.lastrowid
+    finally:
+        conn.close()
 
 
-def last_run(db_path: str | Path = DEFAULT_DB) -> dict | None:
-    """Return the most recent run before the current one, for baseline comparison."""
+def latest_run(db_path: str | Path = DEFAULT_DB) -> dict | None:
+    """Return the most recent stored run summary, or None if the DB is empty."""
     if not Path(db_path).exists():
         return None
     conn = _connect(db_path)
-    row = conn.execute(
-        "SELECT timestamp, provider, model, pass_rate, avg_score FROM runs ORDER BY id DESC LIMIT 1"
-    ).fetchone()
-    conn.close()
+    try:
+        row = conn.execute(
+            "SELECT timestamp, provider, model, pass_rate, avg_score"
+            " FROM runs ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+    finally:
+        conn.close()
     if not row:
         return None
     return {
@@ -85,12 +90,14 @@ def list_runs(db_path: str | Path = DEFAULT_DB, limit: int = 50) -> list[dict]:
     if not Path(db_path).exists():
         return []
     conn = _connect(db_path)
-    rows = conn.execute(
-        "SELECT id, timestamp, provider, model, dataset, pass_rate, avg_score, cost_usd, n_cases"
-        " FROM runs ORDER BY id DESC LIMIT ?",
-        (limit,),
-    ).fetchall()
-    conn.close()
+    try:
+        rows = conn.execute(
+            "SELECT id, timestamp, provider, model, dataset, pass_rate, avg_score, cost_usd, n_cases"
+            " FROM runs ORDER BY id DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+    finally:
+        conn.close()
     keys = ["id", "timestamp", "provider", "model", "dataset",
             "pass_rate", "avg_score", "cost_usd", "n_cases"]
     return [dict(zip(keys, r)) for r in rows]
@@ -101,12 +108,14 @@ def get_run(run_id: int, db_path: str | Path = DEFAULT_DB) -> dict | None:
     if not Path(db_path).exists():
         return None
     conn = _connect(db_path)
-    row = conn.execute(
-        "SELECT id, timestamp, provider, model, dataset, pass_rate, avg_score,"
-        " cost_usd, n_cases, results_json FROM runs WHERE id = ?",
-        (run_id,),
-    ).fetchone()
-    conn.close()
+    try:
+        row = conn.execute(
+            "SELECT id, timestamp, provider, model, dataset, pass_rate, avg_score,"
+            " cost_usd, n_cases, results_json FROM runs WHERE id = ?",
+            (run_id,),
+        ).fetchone()
+    finally:
+        conn.close()
     if not row:
         return None
     detail = json.loads(row[9]) if row[9] else None
