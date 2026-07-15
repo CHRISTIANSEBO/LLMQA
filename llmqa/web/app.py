@@ -267,12 +267,12 @@ def compare(req: CompareRequest) -> dict:
             else:
                 metrics.append(build_metric(name))
 
-        dataset = req.tags and DEFAULT_DATASET  # tag-filter reuses dataset path
         eval_run = run_eval(DEFAULT_DATASET, provider, metrics, tags=req.tags)
 
         payload = eval_run.model_dump()
         payload["pass_rate"] = eval_run.pass_rate
         payload["avg_score"] = eval_run.avg_score
+        payload["score_by_metric"] = eval_run.score_by_metric()
         for case_payload, case_result in zip(payload["results"], eval_run.results):
             case_payload["passed"] = case_result.passed
         all_runs[prov_name] = payload

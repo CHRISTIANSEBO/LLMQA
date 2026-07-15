@@ -405,7 +405,10 @@ function renderComparison({ runs, providers }) {
   const fmt = (r, p) => `<span class="cmp-pill"><strong>${p}</strong> &nbsp; pass ${Math.round(r.pass_rate*100)}% &nbsp; avg ${r.avg_score.toFixed(2)}</span>`;
   sumEl.innerHTML = fmt(runA, pA) + "<span class='cmp-vs'>vs</span>" + fmt(runB, pB);
 
-  // Table
+  // Per-case grouped bar chart
+  renderCmpChart(allCases, runA, runB, pA, pB);
+
+  // Diff table
   const head = document.getElementById("cmp-head");
   head.innerHTML = `<th>Case</th><th>${pA}</th><th>${pB}</th><th>Delta</th>`;
 
@@ -432,6 +435,71 @@ function renderComparison({ runs, providers }) {
   });
 
   document.getElementById("cmp-results").hidden = false;
+}
+
+function renderCmpChart(cases, runA, runB, labelA, labelB) {
+  const el = document.getElementById("cmp-chart");
+  if (!el || !cases.length) return;
+
+  const BAR = 18, GAP = 4, GROUP = BAR * 2 + GAP, GUTTER = 6;
+  const W = Math.max(600, cases.length * (GROUP + GUTTER) + 120);
+  const H = 140;
+  const padL = 110, padR = 16, padT = 28, padB = 24;
+  const chartW = W - padL - padR;
+  const chartH = H - padT - padB;
+
+  const barX = (i, slot) => padL + i * (GROUP + GUTTER) + slot * (BAR + GAP);
+  const barH = (score) => Math.round(score * chartH);
+  const barY = (score) => padT + chartH - barH(score);
+
+  const css = getComputedStyle(document.documentElement);
+  const passCol  = css.getPropertyValue("--pass").trim()  || "#1a7f37";
+  const failCol  = css.getPropertyValue("--fail").trim()  || "#c1121f";
+  const ruleCol  = css.getPropertyValue("--rule").trim()  || "#dddad2";
+  const mutedCol = css.getPropertyValue("--muted").trim() || "#6b6b6b";
+  const inkCol   = css.getPropertyValue("--ink").trim()   || "#111111";
+
+  // horizontal grid lines at 0, 0.5, 1.0
+  const gridLines = [0, 0.5, 1].map(v => {
+    const y = barY(v);
+    return `<line x1="${padL}" y1="${y}" x2="${W - padR}" y2="${y}" stroke="${ruleCol}" stroke-width="1"/>`
+      + `<text x="${padL - 4}" y="${y + 4}" fill="${mutedCol}" font-size="9" text-anchor="end">${v}</text>`;
+  }).join("");
+
+  // bars
+  const bars = cases.map((cid, i) => {
+    const rA = (runA.results || []).find(r => r.case_id === cid);
+    const rB = (runB.results || []).find(r => r.case_id === cid);
+    const sA = rA ? avgScore(rA) : 0, sB = rB ? avgScore(rB) : 0;
+    const pA2 = rA?.passed, pB2 = rB?.passed;
+    const colA = pA2 ? passCol : failCol;
+    const colB = pB2 ? passCol : failCol;
+    const xA = barX(i, 0), xB = barX(i, 1);
+    const label = cid.length > 14 ? cid.slice(0, 13) + "\u2026" : cid;
+    return [
+      `<rect x="${xA}" y="${barY(sA)}" width="${BAR}" height="${barH(sA)}" fill="${colA}" opacity="0.85"/>`,
+      `<rect x="${xB}" y="${barY(sB)}" width="${BAR}" height="${barH(sB)}" fill="${colB}" opacity="0.5"/>`,
+      `<text x="${xA + BAR}" y="${H - 4}" fill="${mutedCol}" font-size="8" text-anchor="middle"
+        transform="rotate(-35 ${xA + BAR} ${H - 4})">${label}</text>`,
+    ].join("");
+  }).join("");
+
+  // legend
+  const legY = padT - 14;
+  const legend = [
+    `<rect x="${padL}" y="${legY}" width="10" height="10" fill="${inkCol}" opacity="0.85"/>`,
+    `<text x="${padL + 13}" y="${legY + 9}" fill="${inkCol}" font-size="10">${labelA}</text>`,
+    `<rect x="${padL + 80}" y="${legY}" width="10" height="10" fill="${inkCol}" opacity="0.5"/>`,
+    `<text x="${padL + 93}" y="${legY + 9}" fill="${inkCol}" font-size="10">${labelB}</text>`,
+    `<rect x="${padL + 160}" y="${legY}" width="10" height="10" fill="${passCol}"/>`,
+    `<text x="${padL + 173}" y="${legY + 9}" fill="${mutedCol}" font-size="10">pass</text>`,
+    `<rect x="${padL + 205}" y="${legY}" width="10" height="10" fill="${failCol}"/>`,
+    `<text x="${padL + 218}" y="${legY + 9}" fill="${mutedCol}" font-size="10">fail</text>`,
+  ].join("");
+
+  el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="per-case score comparison">
+    ${gridLines}${bars}${legend}
+  </svg>`;
 }
 
 function avgScore(r) {
