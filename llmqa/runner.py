@@ -1,6 +1,7 @@
 """Load a dataset, run a model over it, score with metrics, aggregate a run."""
 from __future__ import annotations
 
+from collections.abc import Generator
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -16,13 +17,19 @@ def load_dataset(path: str | Path) -> list[TestCase]:
     return [TestCase(**item) for item in raw]
 
 
-def run_eval(
+def iter_eval(
     dataset_path: str | Path,
     provider: Provider,
     metrics: list[Metric],
     tags: list[str] | None = None,
-) -> EvalRun:
-    """Run every case (optionally filtered by tag) and collect scored results."""
+) -> Generator[tuple[EvalRun, CaseResult], None, None]:
+    """Yield (run, case_result) incrementally as each case completes.
+
+    The same ``EvalRun`` object is yielded with every case so callers can
+    inspect cumulative state (cost, results so far) at each step. Both
+    ``run_eval`` (batch) and the SSE streaming endpoint use this as their
+    shared core loop.
+    """
     cases = load_dataset(dataset_path)
     if tags:
         wanted = set(tags)
@@ -38,14 +45,33 @@ def run_eval(
     for case in cases:
         resp = provider.generate(case.input, case.context)
         run.total_cost_usd += resp.cost_usd
-        run.results.append(
-            CaseResult(
-                case_id=case.id,
-                tags=case.tags,
-                gate_metrics=case.gate_metrics,
-                output=resp.text,
-                latency_ms=round(resp.latency_ms, 1),
-                metrics=[m.score(case, resp.text) for m in metrics],
-            )
+        cr = CaseResult(
+            case_id=case.id,
+            tags=case.tags,
+            gate_metrics=case.gate_metrics,
+            output=resp.text,
+            latency_ms=round(resp.latency_ms, 1),
+            metrics=[m.score(case, resp.text) for m in metrics],
+        )
+        run.results.append(cr)
+        yield run, cr
+
+
+def run_eval(
+    dataset_path: str | Path,
+    provider: Provider,
+    metrics: list[Metric],
+    tags: list[str] | None = None,
+) -> EvalRun:
+    """Run every case and return the completed EvalRun. Thin wrapper over iter_eval."""
+    run = None
+    for run, _ in iter_eval(dataset_path, provider, metrics, tags):
+        pass
+    if run is None:  # empty dataset or all cases filtered out
+        run = EvalRun(
+            dataset=str(dataset_path),
+            model=provider.model,
+            provider=provider.name,
+            timestamp=datetime.now(timezone.utc).isoformat(timespec="seconds"),
         )
     return run
