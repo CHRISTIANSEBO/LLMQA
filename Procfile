@@ -1,1 +1,1 @@
-web: python server.py
+web: uvicorn llmqa.web.app:app --host 0.0.0.0 --port $PORT

@@ -48,15 +48,17 @@ def test_run_mock_and_persist_and_fetch():
     assert d.json()["detail"]["results"]
 
 
-def test_run_anthropic_without_key_is_rejected():
-    # No key configured in the test env -> 400, not a crash.
-    prev = os.environ.pop("ANTHROPIC_API_KEY", None)
-    try:
-        r = client.post("/api/run", json={"provider": "anthropic"})
-        assert r.status_code == 400
-    finally:
-        if prev is not None:
-            os.environ["ANTHROPIC_API_KEY"] = prev
+def test_run_live_provider_without_key_is_rejected():
+    # Any live provider raises RuntimeError when its key is missing -> 400.
+    for provider in ("anthropic", "openai", "xai"):
+        env_key = {"anthropic": "ANTHROPIC_API_KEY", "openai": "OPENAI_API_KEY", "xai": "XAI_API_KEY"}[provider]
+        prev = os.environ.pop(env_key, None)
+        try:
+            r = client.post("/api/run", json={"provider": provider})
+            assert r.status_code == 400, f"{provider} should return 400 without key"
+        finally:
+            if prev is not None:
+                os.environ[env_key] = prev
 
 
 def test_unknown_metric_rejected():

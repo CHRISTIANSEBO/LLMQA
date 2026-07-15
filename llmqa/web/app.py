@@ -25,6 +25,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
+from functools import lru_cache
+
 from ..metrics import REGISTRY, build_metric
 from ..providers import MOCK_PROVIDERS, get_provider
 from ..runner import load_dataset, run_eval
@@ -120,11 +122,14 @@ def health() -> dict:
     }
 
 
+@lru_cache(maxsize=1)
+def _cached_cases() -> list:
+    """Load and cache the golden dataset at first request; never re-read from disk."""
+    return load_dataset(DEFAULT_DATASET)
+
+
 @app.get("/api/config")
 def config() -> dict:
-    dataset_path = DEFAULT_DATASET
-    cases = load_dataset(dataset_path)
-
     real_providers = []
     if os.environ.get("ANTHROPIC_API_KEY"):
         real_providers.append("anthropic")
@@ -133,11 +138,12 @@ def config() -> dict:
     if os.environ.get("XAI_API_KEY"):
         real_providers.append("xai")
 
+    cases = _cached_cases()
     return {
         "providers": list(MOCK_PROVIDERS) + real_providers,
         "all_providers": list(MOCK_PROVIDERS) + ["anthropic", "openai", "xai"],
         "metrics": list(REGISTRY),
-        "dataset": dataset_path,
+        "dataset": DEFAULT_DATASET,
         "cases": [
             {"id": c.id, "input": c.input, "expected": c.expected,
              "tags": c.tags, "has_context": bool(c.context),
@@ -162,14 +168,10 @@ def run_detail(run_id: int) -> dict:
 
 @app.post("/api/run")
 def run(req: RunRequest) -> dict:
-    if req.provider == "anthropic" and not os.environ.get("ANTHROPIC_API_KEY"):
-        raise HTTPException(
-            status_code=400,
-            detail="ANTHROPIC_API_KEY not configured on the server. Use the mock provider.",
-        )
+    # All providers raise RuntimeError when their key is missing; convert to 400.
     try:
         provider = _get_cached_provider(req.provider)
-    except Exception as exc:  # pragma: no cover - defensive
+    except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     metrics = []
