@@ -1,0 +1,86 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "llmqa"
+version = "0.1.0"
+description = "A lightweight LLM Quality Assurance / evaluation harness: golden dataset, pluggable metrics, and CI quality + regression gates."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+authors = [{ name = "Christian Sebo" }]
+keywords = ["llm", "evaluation", "quality-assurance", "testing", "ci", "regression"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Testing",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+# Core runtime: everything needed to run evaluations against the
+# deterministic, key-free `mock` providers (fast/free CI, offline demos).
+dependencies = [
+    "pydantic>=2.6.0",
+    "PyYAML>=6.0",
+    "python-dotenv>=1.0.0",
+]
+
+[project.optional-dependencies]
+# Live model providers (only needed to hit real anthropic/openai/xai).
+providers = [
+    "anthropic>=0.40.0",
+    "openai>=1.0.0",
+]
+# FastAPI web dashboard.
+web = [
+    "fastapi>=0.110.0",
+    "uvicorn[standard]>=0.29.0",
+]
+# Test + lint tooling.
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "httpx>=0.27",
+]
+# Everything, for a full local install.
+all = [
+    "llmqa[providers,web,dev]",
+]
+
+[project.urls]
+Homepage = "https://github.com/CHRISTIANSEBO/LLMQA"
+Repository = "https://github.com/CHRISTIANSEBO/LLMQA"
+"Live demo" = "https://llmqa-production.up.railway.app/"
+
+[project.scripts]
+llmqa = "cli:main"
+
+[tool.hatch.build.targets.wheel]
+# The importable package plus the top-level CLI module and the golden dataset.
+packages = ["llmqa"]
+include = [
+    "cli.py",
+    "server.py",
+    "datasets/qa_golden.yaml",
+]
+
+[tool.hatch.build.targets.wheel.force-include]
+"cli.py" = "cli.py"
+"server.py" = "server.py"
+"datasets/qa_golden.yaml" = "datasets/qa_golden.yaml"
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/llmqa",
+    "/cli.py",
+    "/server.py",
+    "/datasets",
+    "/tests",
+    "/README.md",
+    "/LICENSE",
+]
