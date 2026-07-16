@@ -4,9 +4,9 @@
 [![python](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org/)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-**LLMQA** is a lightweight evaluation harness that treats LLM outputs like software you can test. Point it at a golden dataset, pick your metrics, and get a pass/fail report — plus **CI quality gates** and **regression detection** so a model or prompt change can't silently degrade quality.
+**LLMQA** is a lightweight evaluation harness that treats LLM outputs like software you can test. Point it at a golden dataset, pick your metrics, and get a pass/fail report plus **CI quality gates** and **regression detection** so a model or prompt change can't silently degrade quality.
 
-It automates the kind of structured LLM evaluation and data-annotation work I've done professionally, packaged as a reusable, testable tool — usable from the **CLI** or a **web dashboard**.
+Packaged as a reusable, testable tool usable from the **CLI** or a **web dashboard**.
 
 ## Web dashboard
 
@@ -65,7 +65,7 @@ and the regression/trend dashboard are all meaningful without an API key:
 
 | Provider | Simulates | Behavior |
 |----------|-----------|----------|
-| `mock` / `mock-strong` | A strong current-gen model | Correct, well-formatted, grounded (100% on the golden set). |
+| `mock` / `mock-strong` | A strong current-gen model | Correct, well formatted, grounded (100% on the golden set). |
 | `mock-lite` | A cheaper/smaller model | Right on easy facts, weaker summarization/formatting. |
 | `mock-legacy` | An older model | Fabricates instead of refusing, ignores "JSON only", misses facts. |
 
@@ -119,12 +119,12 @@ python cli.py run [options]
 
 Providers keep an **in-memory response cache** keyed on
 `(provider, model, prompt, context)`. Identical calls within a process are
-served from the cache instead of re-hitting a paid API — a cached hit is billed
+served from the cache instead of re-hitting a paid API a cached hit is billed
 at `$0` and marked `cached`. This matters most for the live `anthropic` provider
 and the web dashboard, where the same golden case (or a repeated judge prompt)
 would otherwise be paid for again on every run. The dashboard reuses one
 cache-enabled provider instance per name across requests, so repeated runs
-really do hit the cache. The cache is process-local and
+really do hit the cache. The cache is processed local and
 never written to disk, so there's no risk of serving stale answers across
 restarts. Pass `--no-cache` to force a fresh call per case.
 
@@ -158,7 +158,7 @@ Because the `mock` provider is deterministic and needs no API key, CI is fast, f
 | Metric | What it measures |
 |--------|------------------|
 | `exact_match` | Normalized string match, with structural JSON comparison for JSON answers. |
-| `similarity` | Token-overlap (Jaccard) similarity — swappable for embeddings later. |
+| `similarity` | Token overlap (Jaccard) similarity — swappable for embeddings later. |
 | `llm_judge` | LLM-as-judge with discrete grades + chain-of-thought; heuristic fallback on the mock provider. |
 | `hallucination` | Grounding check for cases with context; rewards correct refusals, N/A without context. |
 
@@ -194,12 +194,6 @@ Real eval harnesses don't fail a summarization task on exact string match. Each 
 ## Deploy
 
 Deploys as a single service (Railway-ready via `railway.json` + `nixpacks.toml`, honors `$PORT`). Set any of `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, or `XAI_API_KEY` in the environment to enable that live provider; without any key the dashboard still runs on the free, deterministic `mock` provider.
-
-## Roadmap
-
-- **Phase 1 (done):** dataset + runner + metrics + CLI + gates + tests.
-- **Phase 2 (done):** per-case metric gating, live-model robustness, results dashboard (FastAPI + frontend), Railway deploy config.
-- **Phase 3:** richer failure analysis and embedding-based similarity.
 
 ## License
 
