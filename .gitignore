@@ -11,10 +11,14 @@ dist/
 venv/
 env/
 
-# Test / cache
+# Test / cache / coverage
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
 
 # LLMQA run history / reports
 *.db
