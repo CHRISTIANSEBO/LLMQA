@@ -1,8 +1,11 @@
 # LLMQA — LLM Quality Assurance
 
+[![live demo](https://img.shields.io/badge/live%20demo-online-brightgreen)](https://llmqa-production.up.railway.app/)
 [![tests](https://github.com/CHRISTIANSEBO/LLMQA/actions/workflows/tests.yml/badge.svg)](https://github.com/CHRISTIANSEBO/LLMQA/actions/workflows/tests.yml)
 [![python](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org/)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+
+**[▶ Try the live dashboard →](https://llmqa-production.up.railway.app/)**
 
 **LLMQA** is a lightweight evaluation harness that treats LLM outputs like software you can test. Point it at a golden dataset, pick your metrics, and get a pass/fail report plus **CI quality gates** and **regression detection** so a model or prompt change can't silently degrade quality.
 
