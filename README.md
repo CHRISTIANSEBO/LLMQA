@@ -12,6 +12,10 @@ It automates the kind of structured LLM evaluation and data-annotation work I've
 
 LLMQA ships with a FastAPI + vanilla-JS dashboard: trigger runs, see per-case pass/fail with metric breakdowns, and track a quality trend across runs. It's a single service (the API serves the built frontend), so it deploys anywhere in one process.
 
+![LLMQA dashboard demo](docs/demo.gif)
+
+*Run an evaluation, compare two providers side-by-side, and track the quality trend across runs.*
+
 ```bash
 pip install -r requirements.txt
 python server.py            # -> http://localhost:8000
