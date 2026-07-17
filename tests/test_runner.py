@@ -88,3 +88,22 @@ def test_all_metrics_run():
     run = run_eval(DATASET, provider, metrics)
     names = {m.metric for r in run.results for m in r.metrics}
     assert names == {"exact_match", "similarity", "llm_judge", "hallucination"}
+
+
+def test_tag_filtering_no_matches():
+    """Filtering to a tag set that matches zero cases produces an empty run.
+
+    This exercises the run=None fallback in run_eval (empty dataset or all
+    cases filtered) and verifies the resulting EvalRun has sane aggregates.
+    """
+    provider = get_provider("mock")
+    run = run_eval(
+        DATASET, provider, [build_metric("exact_match")], tags=["no-such-tag-xyz123"]
+    )
+    assert len(run.results) == 0
+    assert run.pass_rate == 0.0
+    assert run.avg_score == 0.0
+    assert run.total_cost_usd == 0.0
+    # Still has the expected metadata
+    assert run.dataset.endswith("qa_golden.yaml")
+    assert run.provider == "mock"
