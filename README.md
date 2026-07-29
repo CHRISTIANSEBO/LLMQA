@@ -7,7 +7,7 @@
 
 **[▶ Try the live dashboard →](https://llmqa-production.up.railway.app/)**
 
-**LLMQA** is a lightweight evaluation harness that treats LLM outputs like software you can test. Point it at a golden dataset, pick your metrics, and get a pass/fail report plus **CI quality gates** and **regression detection** so a model or prompt change can't silently degrade quality.
+**LLMQA** is an open-source harness for making LLM quality **measurable, reviewable, and gate-able in CI** — free, key-optional, and provider-agnostic. It treats LLM outputs like software you can test: point it at a golden dataset, pick your metrics, and get a pass/fail report plus **CI quality gates** and **regression detection** so a model or prompt change can't silently degrade quality.
 
 Packaged as a reusable, testable tool usable from the **CLI** or a **web dashboard**.
 
