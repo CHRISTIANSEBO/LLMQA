@@ -194,6 +194,23 @@ Real eval harnesses don't fail a summarization task on exact string match. Each 
   gate_metrics: [llm_judge]   # exact_match is reported but doesn't gate
 ```
 
+## Contributing
+
+LLMQA is open source (MIT) and contributions are welcome — bug fixes, new
+metrics or providers, more golden-dataset cases, and docs. Because the `mock`
+providers are deterministic and key-free, you can run the full test suite and
+the self-eval gate without any API key:
+
+```bash
+pip install -r requirements-dev.txt
+pytest tests/ -v
+python cli.py run --provider mock --min-pass-rate 0.8 --no-store
+```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full dev setup, the two CI gates,
+and how to add a metric, provider, or dataset case. Please also read the
+[Code of Conduct](CODE_OF_CONDUCT.md).
+
 ## Deploy
 
 Deploys as a single service (Railway-ready via `railway.json` + `nixpacks.toml`, honors `$PORT`). Set any of `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, or `XAI_API_KEY` in the environment to enable that live provider; without any key the dashboard still runs on the free, deterministic `mock` provider.
