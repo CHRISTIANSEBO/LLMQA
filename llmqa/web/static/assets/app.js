@@ -32,9 +32,29 @@ async function init() {
   });
 
   $("#runBtn").addEventListener("click", runEval);
+  $("#presetBtn").addEventListener("click", runPreset);
+  setupCopy();
+  setupTheme();
+  loadStarCount();
   initCompare(cfg.all_providers);
   await loadHistory();
-  await loadLatestRun();
+  await handlePermalink();
+}
+
+// Load a specific stored run by id and render it. Returns true on success.
+async function loadRunById(id) {
+  const full = await api(`/api/runs/${id}`);
+  if (!full.detail) return false;
+  const run = full.detail;
+  // The stored detail lacks computed aggregates; take them from the summary.
+  run.provider = full.provider;
+  run.model = full.model;
+  run.pass_rate = full.pass_rate;
+  run.avg_score = full.avg_score;
+  run.total_cost_usd = full.cost_usd;
+  renderRun(run);
+  $("#status").textContent = `Showing saved run #${full.id}`;
+  return true;
 }
 
 // On first load, show the most recent stored run so the page isn't empty.
@@ -42,19 +62,84 @@ async function loadLatestRun() {
   try {
     const { runs } = await api("/api/history?limit=1");
     if (!runs.length) return;
-    const full = await api(`/api/runs/${runs[0].id}`);
-    if (full.detail) {
-      const run = full.detail;
-      // The stored detail lacks computed aggregates; take them from the summary.
-      run.provider = full.provider;
-      run.model = full.model;
-      run.pass_rate = full.pass_rate;
-      run.avg_score = full.avg_score;
-      run.total_cost_usd = full.cost_usd;
-      renderRun(run);
-      $("#status").textContent = `Showing saved run #${full.id}`;
+    await loadRunById(runs[0].id);
+  } catch (_) { /* non-fatal */ }
+}
+
+// Deep-link support: /?run=<id> loads that run; otherwise show the latest.
+async function handlePermalink() {
+  const id = new URLSearchParams(location.search).get("run");
+  if (id) {
+    try { if (await loadRunById(id)) return; } catch (_) { /* fall through */ }
+  }
+  await loadLatestRun();
+}
+
+// One-click demo: run the deterministic mock-legacy provider so visitors can
+// watch the quality gate catch a regression without knowing which knob to turn.
+async function runPreset() {
+  const sel = $("#provider");
+  const legacy = [...sel.options].find((o) => o.value === "mock-legacy" && !o.disabled);
+  if (legacy) sel.value = "mock-legacy";
+  $("#tags").value = "";
+  document.querySelectorAll("#metrics input").forEach((i) => { i.checked = true; });
+  await runEval();
+}
+
+// Copy the CI workflow snippet.
+function setupCopy() {
+  const btn = $("#copyCi");
+  if (!btn) return;
+  btn.addEventListener("click", async () => {
+    const text = $("#ciYaml").innerText;
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch (_) {
+      const ta = document.createElement("textarea");
+      ta.value = text; document.body.appendChild(ta); ta.select();
+      try { document.execCommand("copy"); } catch (e) {}
+      ta.remove();
+    }
+    btn.textContent = "Copied \u2713";
+    btn.classList.add("copied");
+    setTimeout(() => { btn.textContent = "Copy"; btn.classList.remove("copied"); }, 1600);
+  });
+}
+
+// Live GitHub star count on the CTA (best-effort; unauthenticated API).
+async function loadStarCount() {
+  try {
+    const r = await fetch("https://api.github.com/repos/CHRISTIANSEBO/LLMQA");
+    if (!r.ok) return;
+    const d = await r.json();
+    if (typeof d.stargazers_count === "number") {
+      $("#ghStar").textContent = `\u2605 Star ${d.stargazers_count.toLocaleString()}`;
     }
   } catch (_) { /* non-fatal */ }
+}
+
+// Dark / light theme toggle. OS preference by default; user choice persists.
+function setupTheme() {
+  const root = document.documentElement;
+  const toggle = $("#themeToggle");
+  const saved = localStorage.getItem("llmqa-theme");
+  if (saved === "dark" || saved === "light") root.setAttribute("data-theme", saved);
+  const prefersDark = () => window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+  const isDark = () => (root.getAttribute("data-theme") || (prefersDark() ? "dark" : "light")) === "dark";
+  const sync = () => {
+    if (!toggle) return;
+    toggle.textContent = isDark() ? "\u25d1" : "\u25d0";
+    toggle.setAttribute("aria-pressed", String(isDark()));
+  };
+  sync();
+  if (toggle) toggle.addEventListener("click", () => {
+    const next = isDark() ? "light" : "dark";
+    root.setAttribute("data-theme", next);
+    localStorage.setItem("llmqa-theme", next);
+    sync();
+    // The trend chart bakes CSS ink colors at render time; re-render on switch.
+    loadHistory();
+  });
 }
 
 function selectedMetrics() {
@@ -284,6 +369,14 @@ async function loadHistory() {
       <td>${Math.round(r.pass_rate * 100)}%</td>
       <td>${r.avg_score.toFixed(2)}</td>
       <td>$${(r.cost_usd || 0).toFixed(4)}</td>`;
+    tr.style.cursor = "pointer";
+    tr.title = "Load this run (updates the shareable link)";
+    tr.addEventListener("click", () => {
+      loadRunById(r.id).catch(() => {});
+      history.replaceState(null, "", `?run=${r.id}`);
+      const rp = $("#resultsPanel");
+      if (rp) rp.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
     tbody.appendChild(tr);
   });
   renderTrend(runs);

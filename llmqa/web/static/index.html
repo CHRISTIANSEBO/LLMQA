@@ -4,10 +4,26 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>LLMQA — LLM Quality Assurance</title>
+<meta name="description" content="LLMQA is an open-source harness for making LLM quality measurable, reviewable, and gate-able in CI — golden datasets, pluggable metrics, quality gates, and regression detection. Free, key-optional, provider-agnostic." />
+<meta name="theme-color" content="#111111" />
+<link rel="canonical" href="https://llmqa-production.up.railway.app/" />
+<!-- Open Graph -->
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="LLMQA" />
+<meta property="og:title" content="LLMQA — LLM Quality Assurance" />
+<meta property="og:description" content="Open-source harness that treats LLM outputs like software you can test: golden datasets, pluggable metrics, CI quality gates, and regression detection." />
+<meta property="og:url" content="https://llmqa-production.up.railway.app/" />
+<meta property="og:image" content="https://llmqa-production.up.railway.app/assets/og-image.png" />
+<!-- Twitter -->
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="LLMQA — LLM Quality Assurance" />
+<meta name="twitter:description" content="Open-source harness that treats LLM outputs like software you can test. Golden datasets, pluggable metrics, CI quality gates, regression detection." />
+<meta name="twitter:image" content="https://llmqa-production.up.railway.app/assets/og-image.png" />
 <link rel="stylesheet" href="/assets/app.css" />
 <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg" />
 </head>
 <body>
+<a class="skip-link" href="#main-content">Skip to content</a>
 <header class="topbar">
   <div class="brand">
     <span class="logo">✓QA</span>
@@ -19,12 +35,14 @@
   <nav class="topnav" aria-label="primary">
     <a href="#about">About</a>
     <a href="https://github.com/CHRISTIANSEBO/LLMQA#readme" target="_blank" rel="noopener">Docs</a>
+    <a href="/docs" target="_blank" rel="noopener" title="Interactive API docs">API</a>
     <a href="https://github.com/CHRISTIANSEBO/LLMQA/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">Contribute</a>
-    <a class="gh-star" href="https://github.com/CHRISTIANSEBO/LLMQA" target="_blank" rel="noopener" aria-label="Star LLMQA on GitHub">★ Star on GitHub</a>
+    <button id="themeToggle" class="theme-toggle" type="button" aria-label="Toggle dark mode" title="Toggle dark mode">◐</button>
+    <a class="gh-star" id="ghStar" href="https://github.com/CHRISTIANSEBO/LLMQA" target="_blank" rel="noopener" aria-label="Star LLMQA on GitHub">★ Star on GitHub</a>
   </nav>
 </header>
 
-<main>
+<main id="main-content">
   <section class="lede" id="about">
     <p class="edition">Open Source · MIT Licensed · v0.2</p>
     <p class="standfirst">LLMQA is an open-source harness for making LLM quality
@@ -43,6 +61,11 @@
       provider only — no API key, no cost. Clone the repo and add your own
       <code>ANTHROPIC_API_KEY</code>, <code>OPENAI_API_KEY</code>, or
       <code>XAI_API_KEY</code> to evaluate live models.</p>
+    <ol class="howto" aria-label="How it works">
+      <li><span class="howto-n">1</span><span class="howto-t"><strong>Golden dataset</strong> — tagged Q&amp;A cases with expected answers.</span></li>
+      <li><span class="howto-n">2</span><span class="howto-t"><strong>Metrics &amp; gates</strong> — exact match, similarity, LLM-judge, hallucination; per-case gating.</span></li>
+      <li><span class="howto-n">3</span><span class="howto-t"><strong>Pass / fail in CI</strong> — quality &amp; regression gates fail the build on a drop.</span></li>
+    </ol>
   </section>
 
   <section class="panel controls">
@@ -61,8 +84,11 @@
     <fieldset id="metrics" class="metrics">
       <legend>Metrics</legend>
     </fieldset>
-    <button id="runBtn" class="run">Run evaluation</button>
-    <span id="status" class="status"></span>
+    <div class="run-actions">
+      <button id="runBtn" class="run">Run evaluation</button>
+      <button id="presetBtn" class="run run--ghost" type="button" title="Run the mock-legacy provider to see the gates catch a regression">▶ Show a regression</button>
+      <span id="status" class="status" role="status" aria-live="polite"></span>
+    </div>
   </section>
 
   <section class="cards" id="summary" hidden>
@@ -122,6 +148,29 @@
         <thead><tr><th>#</th><th>When</th><th>Provider / model</th><th>Pass</th><th>Avg</th><th>Cost</th></tr></thead>
         <tbody></tbody>
       </table>
+    </div>
+  </section>
+
+  <section class="panel" id="ciPanel">
+    <h2>Add to your CI</h2>
+    <p class="hint">Drop this into <code>.github/workflows/llmqa.yml</code> to fail a build when quality drops. The key-free <code>mock</code> provider keeps CI fast, free, and deterministic.</p>
+    <div class="code-block">
+      <button class="copy-btn" id="copyCi" type="button" aria-label="Copy workflow YAML">Copy</button>
+      <pre id="ciYaml"><code>name: llmqa
+on: [push, pull_request]
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements-dev.txt
+      # Quality gate: fail if pass rate &lt; 80%
+      - run: python cli.py run --provider mock --min-pass-rate 0.8
+      # Regression gate: fail if avg score drops vs the last stored run
+      - run: python cli.py run --provider mock --regression</code></pre>
     </div>
   </section>
 

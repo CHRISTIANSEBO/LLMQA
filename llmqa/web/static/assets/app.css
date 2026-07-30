@@ -24,9 +24,35 @@
   --warn: #92400e;  --warn-bg: #f8f2e3;   /* deep amber-brown: WCAG-AA on white */
   --fail: #c1121f;  --fail-bg: #f9ecec;
 
+  /* Derived surfaces so dark mode can invert cleanly. */
+  --on-ink: #ffffff;     /* text/glyph on an ink-filled button */
+  --ink-hover: #000000;  /* ink button hover */
+  --field-bg: #ffffff;   /* inputs / selects / code surfaces */
+
   --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman", serif;
   --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+}
+
+/* ---- Dark mode: same ink-on-paper aesthetic, inverted (warm charcoal paper,
+ * warm off-white ink). Test-state hues re-tuned for AA contrast on dark.
+ * Applied when the OS prefers dark (unless the user forced light), or when the
+ * user explicitly picks dark via the toggle. ---- */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #14140f; --paper-edge: #1c1c15; --ink: #f2efe6; --ink-2: #cfcabb;
+    --muted: #9a958a; --rule: #34322a; --rule-strong: #f2efe6;
+    --pass: #56c877; --pass-bg: #13251a; --warn: #e0a441; --warn-bg: #2a2213;
+    --fail: #ff6b6b; --fail-bg: #2a1414;
+    --on-ink: #14140f; --ink-hover: #ffffff; --field-bg: #22221a;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #14140f; --paper-edge: #1c1c15; --ink: #f2efe6; --ink-2: #cfcabb;
+  --muted: #9a958a; --rule: #34322a; --rule-strong: #f2efe6;
+  --pass: #56c877; --pass-bg: #13251a; --warn: #e0a441; --warn-bg: #2a2213;
+  --fail: #ff6b6b; --fail-bg: #2a1414;
+  --on-ink: #14140f; --ink-hover: #ffffff; --field-bg: #22221a;
 }
 
 * { box-sizing: border-box; }
@@ -71,7 +97,11 @@ body {
 .topnav a:hover { border-bottom-color: var(--ink); }
 .topnav a.gh-star { border: 1px solid var(--ink); border-radius: 3px; padding: 5px 12px;
   font-family: var(--mono); font-variant: normal; letter-spacing: 0.3px; }
-.topnav a.gh-star:hover { background: var(--ink); color: #fff; border-bottom-color: var(--ink); }
+.topnav a.gh-star:hover { background: var(--ink); color: var(--on-ink); border-bottom-color: var(--ink); }
+.theme-toggle { background: transparent; border: 1px solid var(--rule-strong); color: var(--ink);
+  border-radius: 3px; width: 30px; height: 28px; cursor: pointer; font-size: 14px; line-height: 1;
+  display: inline-flex; align-items: center; justify-content: center; }
+.theme-toggle:hover { background: var(--ink); color: var(--on-ink); }
 
 /* ---- Lede / standfirst: newspaper intro ---- */
 .lede { margin-bottom: 30px; padding-bottom: 26px; border-bottom: 1px solid var(--rule); }
@@ -83,9 +113,39 @@ body {
 .lede-badges { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .osbadge { font-family: var(--mono); font-size: 11px; letter-spacing: 0.4px; color: var(--ink-2);
   border: 1px solid var(--rule-strong); border-radius: 3px; padding: 3px 9px; background: var(--paper-edge); }
-.osbadge--cta { background: var(--ink); color: #fff; border-color: var(--ink); font-weight: 700;
+.osbadge--cta { background: var(--ink); color: var(--on-ink); border-color: var(--ink); font-weight: 700;
   text-decoration: none; }
-.osbadge--cta:hover { background: #000; }
+.osbadge--cta:hover { background: var(--ink-hover); }
+
+/* ---- Skip link (a11y) ---- */
+.skip-link { position: absolute; left: -999px; top: 8px; background: var(--ink); color: var(--on-ink);
+  padding: 8px 14px; border-radius: 3px; z-index: 100; font-size: 13px; font-family: var(--mono); }
+.skip-link:focus { left: 8px; }
+
+/* ---- How-it-works strip (newspaper 3-step) ---- */
+.howto { list-style: none; margin: 22px 0 0; padding: 0; display: grid;
+  grid-template-columns: repeat(3, 1fr); gap: 0; border: 1px solid var(--rule-strong); border-radius: 4px; overflow: hidden; }
+.howto li { display: flex; gap: 12px; align-items: flex-start; padding: 14px 18px;
+  border-right: 1px solid var(--rule); }
+.howto li:last-child { border-right: none; }
+.howto-n { font-family: var(--serif); font-size: 26px; font-weight: 700; line-height: 1; color: var(--ink); }
+.howto-t { font-size: 13px; color: var(--ink-2); line-height: 1.45; }
+.howto-t strong { color: var(--ink); }
+@media (max-width: 720px) { .howto { grid-template-columns: 1fr; }
+  .howto li { border-right: none; border-bottom: 1px solid var(--rule); }
+  .howto li:last-child { border-bottom: none; } }
+
+/* ---- CI code snippet with copy button ---- */
+.code-block { position: relative; }
+.code-block pre { margin: 0; background: var(--field-bg); border: 1px solid var(--rule-strong);
+  border-radius: 4px; padding: 16px 18px; overflow-x: auto; }
+.code-block code { font-family: var(--mono); font-size: 12.5px; line-height: 1.6; color: var(--ink);
+  white-space: pre; }
+.copy-btn { position: absolute; top: 10px; right: 10px; background: var(--paper-edge);
+  border: 1px solid var(--rule-strong); color: var(--ink); border-radius: 3px; padding: 4px 10px;
+  font-size: 11px; font-family: var(--mono); cursor: pointer; letter-spacing: 0.5px; }
+.copy-btn:hover { background: var(--ink); color: var(--on-ink); }
+.copy-btn.copied { background: var(--pass-bg); color: var(--pass); border-color: var(--pass); }
 .demo-note { margin: 18px 0 0; font-size: 12.5px; color: var(--muted); font-style: italic; max-width: 760px; }
 .demo-note code { font-family: var(--mono); font-style: normal; font-size: 11.5px;
   background: var(--paper); border: 1px solid var(--rule); border-radius: 2px; padding: 0 4px; }
@@ -100,7 +160,7 @@ body {
   font-family: var(--mono); border-bottom: 1px solid var(--rule-strong); }
 .colophon-links a:hover { color: var(--muted); border-bottom-color: var(--muted); }
 
-main { max-width: 1040px; margin: 0 auto; padding: 30px 22px 60px; }
+main { max-width: none; width: 100%; margin: 0 auto; padding: 30px clamp(22px, 4vw, 72px) 60px; }
 
 /* ---- Panels: understated, hairline-ruled sections ---- */
 .panel {
@@ -121,7 +181,7 @@ label { display: flex; flex-direction: column; font-size: 11px; color: var(--mut
 label.checkbox { flex-direction: row; align-items: center; gap: 8px; color: var(--ink);
   font-size: 13px; text-transform: none; letter-spacing: normal; }
 select, input[type=text] {
-  background: #fff; border: 1px solid var(--rule-strong); color: var(--ink);
+  background: var(--field-bg); border: 1px solid var(--rule-strong); color: var(--ink);
   border-radius: 3px; padding: 8px 10px; font-size: 14px; min-width: 190px;
   font-family: var(--mono);
 }
@@ -134,11 +194,14 @@ select:focus, input[type=text]:focus { outline: 2px solid var(--ink); outline-of
   text-transform: none; letter-spacing: normal; }
 
 .run {
-  background: var(--ink); color: #fff; border: 1px solid var(--ink); font-weight: 700;
+  background: var(--ink); color: var(--on-ink); border: 1px solid var(--ink); font-weight: 700;
   padding: 11px 22px; border-radius: 3px; font-size: 14px; cursor: pointer;
   text-transform: uppercase; letter-spacing: 0.8px;
 }
-.run:hover { background: #000; }
+.run:hover { background: var(--ink-hover); }
+.run--ghost { background: transparent; color: var(--ink); }
+.run--ghost:hover { background: var(--ink); color: var(--on-ink); }
+.run-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
 .run:disabled { opacity: 0.4; cursor: not-allowed; }
 .status { margin-left: 14px; color: var(--muted); font-size: 13px; font-family: var(--mono); }
 
@@ -216,7 +279,7 @@ tbody tr:hover { background: var(--paper); }
 .tf-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-right: 2px; }
 .tf-btn { background: var(--paper); border: 1px solid var(--rule); color: var(--muted); border-radius: 3px; padding: 2px 10px; font-size: 12px; cursor: pointer; font-family: var(--mono); transition: border-color 0.1s, color 0.1s; }
 .tf-btn:hover { border-color: var(--ink); color: var(--ink); }
-.tf-btn.active { background: var(--ink); border-color: var(--ink); color: #fff; font-weight: 700; }
+.tf-btn.active { background: var(--ink); border-color: var(--ink); color: var(--on-ink); font-weight: 700; }
 .tf-clear { background: none; border: none; color: var(--muted); font-size: 11px; cursor: pointer; text-decoration: underline dotted; padding: 0 4px; font-family: var(--mono); }
 .tf-clear:hover { color: var(--ink); }
 
