@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Dashboard — LLMQA</title>
+<meta name="description" content="Run an LLMQA evaluation in the browser: pick a provider and metrics, get a pass/fail report, compare providers, and track quality over time." />
+<link rel="stylesheet" href="/assets/app.css" />
+<link rel="icon" type="image/svg+xml" href="/assets/favicon.svg" />
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="topbar">
+  <a class="brand" href="/">
+    <span class="logo">✓QA</span>
+    <div>
+      <h1>LLMQA</h1>
+      <p class="tagline">LLM Quality Assurance — evaluate models like software you can test</p>
+    </div>
+  </a>
+  <nav class="topnav" aria-label="primary">
+    <a href="/">Home</a>
+    <a href="/dashboard" aria-current="page">Dashboard</a>
+    <a href="/docs">Docs</a>
+    <a href="/about">About</a>
+    <a class="gh-star" href="https://github.com/CHRISTIANSEBO/LLMQA" target="_blank" rel="noopener" aria-label="Star LLMQA on GitHub">★ Star on GitHub</a>
+  </nav>
+</header>
+
+<main id="main">
+  <section class="page-head">
+    <p class="edition">Interactive demo</p>
+    <h2 class="page-title">Dashboard</h2>
+    <p class="page-sub">Run the golden dataset through a provider, compare two models
+      side-by-side, and watch quality trend over time. This hosted demo is
+      <strong>mock-only</strong> — deterministic, free, no API key.</p>
+  </section>
+
+  <section class="panel controls">
+    <h2>Run an evaluation</h2>
+    <div class="control-row">
+      <label>Provider
+        <select id="provider"></select>
+      </label>
+      <label>Tags (optional)
+        <input id="tags" type="text" placeholder="e.g. factual rag" />
+      </label>
+      <label class="checkbox">
+        <input id="store" type="checkbox" checked /> Save to history
+      </label>
+    </div>
+    <fieldset id="metrics" class="metrics">
+      <legend>Metrics</legend>
+    </fieldset>
+    <button id="runBtn" class="run">Run evaluation</button>
+    <span id="status" class="status" aria-live="polite"></span>
+  </section>
+
+  <section class="cards" id="summary" hidden>
+    <div class="card"><span class="k">Pass rate</span><span class="v" id="s-pass">—</span></div>
+    <div class="card"><span class="k">Avg score</span><span class="v" id="s-score">—</span></div>
+    <div class="card"><span class="k">Model</span><span class="v small" id="s-model">—</span></div>
+    <div class="card"><span class="k">Cost</span><span class="v" id="s-cost">—</span></div>
+  </section>
+
+  <section class="panel" id="resultsPanel" hidden>
+    <h2>Case results</h2>
+    <p class="hint">Bold metric = gates this case's pass/fail. Others are informational — a case can PASS with a low non-gating score (e.g. a summary shouldn't fail on exact string match).</p>
+    <div id="tagFilter" class="tag-filter-bar" aria-label="Filter by tag"></div>
+    <div class="legend" aria-label="score legend">
+      <span class="pass"><span class="g">✓</span> pass · score ≥ the metric's threshold</span>
+      <span class="mid"><span class="g">✓</span> pass (marginal) · passed but score &lt; 0.80</span>
+      <span class="fail"><span class="g">✕</span> fail · score &lt; the metric's threshold</span>
+    </div>
+    <div class="table-wrap">
+      <table id="results">
+        <thead><tr><th>Case</th><th>Result</th><th>Tags</th><th>Latency</th><th class="metric-cols">Metrics</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="panel" id="comparePanel">
+    <h2>Compare providers</h2>
+    <p class="hint">Run the same dataset through two providers side-by-side and see exactly where they diverge.</p>
+    <div class="control-row">
+      <label>Provider A
+        <select id="cmp-a"></select>
+      </label>
+      <label>Provider B
+        <select id="cmp-b"></select>
+      </label>
+      <button id="cmpBtn" class="run">Compare</button>
+      <span id="cmp-status" class="status" aria-live="polite"></span>
+    </div>
+    <div id="cmp-results" hidden>
+      <div class="cmp-summary" id="cmp-summary"></div>
+      <div id="cmp-chart" class="cmp-chart" aria-label="comparison chart"></div>
+      <div class="table-wrap">
+        <table id="cmp-table">
+          <thead><tr id="cmp-head"></tr></thead>
+          <tbody id="cmp-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Quality trend</h2>
+    <div id="trend" class="trend">No history yet — run an evaluation.</div>
+    <div class="table-wrap">
+      <table id="history">
+        <thead><tr><th>#</th><th>When</th><th>Provider / model</th><th>Pass</th><th>Avg</th><th>Cost</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<footer>LLMQA v0.2 · open-source LLM evaluation harness · MIT licensed · maintained by <a href="https://github.com/CHRISTIANSEBO" target="_blank" rel="noopener">@CHRISTIANSEBO</a></footer>
+
+<script src="/assets/app.js"></script>
+</body>
+</html>

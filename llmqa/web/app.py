@@ -52,6 +52,11 @@ app = FastAPI(
     description="LLM Quality Assurance — run evaluations and track quality over time.",
     version="0.2.0",
     lifespan=lifespan,
+    # The site uses /docs for its own documentation page, so move the
+    # auto-generated OpenAPI UIs out of the way.
+    docs_url="/api/docs",
+    redoc_url="/api/redoc",
+    openapi_url="/api/openapi.json",
 )
 
 # CORS is env-configurable so a split frontend/backend deploy still works.
@@ -281,16 +286,42 @@ def compare(req: CompareRequest) -> dict:
 
 
 # --- Static frontend (mounted last so /api routes take precedence) ----------
+# Multi-page site: each route maps to its own HTML document. Clean URLs
+# (e.g. /dashboard) serve the matching <name>.html so links stay pretty.
+PAGES = {
+    "/": "index.html",
+    "/dashboard": "dashboard.html",
+    "/docs": "docs.html",
+    "/about": "about.html",
+}
+
 if STATIC_DIR.exists():
     app.mount("/assets", StaticFiles(directory=STATIC_DIR / "assets"), name="assets")
 
+    def _page(name: str) -> FileResponse:
+        return FileResponse(STATIC_DIR / name)
+
     @app.get("/")
     def index() -> FileResponse:
-        return FileResponse(STATIC_DIR / "index.html")
+        return _page("index.html")
+
+    @app.get("/dashboard")
+    def dashboard() -> FileResponse:
+        return _page("dashboard.html")
+
+    @app.get("/docs")
+    def docs() -> FileResponse:
+        return _page("docs.html")
+
+    @app.get("/about")
+    def about() -> FileResponse:
+        return _page("about.html")
 
     @app.exception_handler(404)
-    async def spa_fallback(request, exc):  # noqa: ANN001
-        # SPA fallback: non-API 404s serve index.html so client routing works.
+    async def not_found(request, exc):  # noqa: ANN001
+        # API 404s stay JSON. For a bare clean-URL that matches a known page
+        # (e.g. a trailing-slash variant), serve it; otherwise fall back to home.
         if request.url.path.startswith("/api"):
             return JSONResponse({"detail": "Not Found"}, status_code=404)
-        return FileResponse(STATIC_DIR / "index.html")
+        page = PAGES.get(request.url.path.rstrip("/") or "/")
+        return FileResponse(STATIC_DIR / (page or "index.html"))

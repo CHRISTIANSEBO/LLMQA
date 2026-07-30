@@ -12,6 +12,33 @@ from llmqa.web.app import app  # noqa: E402
 client = TestClient(app)
 
 
+def test_pages_served():
+    """Each clean URL serves its own HTML document."""
+    for path, marker in [
+        ("/", "How it works"),
+        ("/dashboard", "Run an evaluation"),
+        ("/docs", "Quickstart"),
+        ("/about", "About LLMQA"),
+    ]:
+        r = client.get(path)
+        assert r.status_code == 200, path
+        assert "text/html" in r.headers["content-type"], path
+        assert marker in r.text, f"{marker!r} missing from {path}"
+
+
+def test_api_docs_not_shadowed_by_docs_page():
+    """The site's /docs page must not clobber the OpenAPI schema/UI."""
+    assert client.get("/api/openapi.json").status_code == 200
+    # /docs returns the HTML docs page, not Swagger UI.
+    assert "Quickstart" in client.get("/docs").text
+
+
+def test_unknown_page_falls_back_to_home():
+    r = client.get("/does-not-exist")
+    assert r.status_code == 200
+    assert "How it works" in r.text
+
+
 def test_health():
     r = client.get("/api/health")
     assert r.status_code == 200
