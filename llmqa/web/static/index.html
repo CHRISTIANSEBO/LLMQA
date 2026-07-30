@@ -16,10 +16,35 @@
       <p class="tagline">LLM Quality Assurance — evaluate models like software you can test</p>
     </div>
   </div>
-  <a class="gh" href="https://github.com/CHRISTIANSEBO/LLMQA" target="_blank" rel="noopener">GitHub ↗</a>
+  <nav class="topnav" aria-label="primary">
+    <a href="#about">About</a>
+    <a href="https://github.com/CHRISTIANSEBO/LLMQA#readme" target="_blank" rel="noopener">Docs</a>
+    <a href="https://github.com/CHRISTIANSEBO/LLMQA/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">Contribute</a>
+    <a class="gh-star" href="https://github.com/CHRISTIANSEBO/LLMQA" target="_blank" rel="noopener" aria-label="Star LLMQA on GitHub">★ Star on GitHub</a>
+  </nav>
 </header>
 
 <main>
+  <section class="lede" id="about">
+    <p class="edition">Open Source · MIT Licensed · v0.2</p>
+    <p class="standfirst">LLMQA is an open-source harness for making LLM quality
+      <em>measurable, reviewable, and gate-able in CI</em> — free, key-optional,
+      and provider-agnostic. Point it at a golden dataset, pick your metrics, and
+      get a pass/fail report with quality gates and regression detection so a
+      model or prompt change can't silently degrade quality.</p>
+    <div class="lede-badges">
+      <span class="osbadge">MIT License</span>
+      <span class="osbadge">Python 3.11+</span>
+      <span class="osbadge">CI-gated</span>
+      <span class="osbadge">Provider-agnostic</span>
+      <a class="osbadge osbadge--cta" href="https://github.com/CHRISTIANSEBO/LLMQA" target="_blank" rel="noopener">★ Star on GitHub</a>
+    </div>
+    <p class="demo-note">This hosted demo runs the free, deterministic <code>mock</code>
+      provider only — no API key, no cost. Clone the repo and add your own
+      <code>ANTHROPIC_API_KEY</code>, <code>OPENAI_API_KEY</code>, or
+      <code>XAI_API_KEY</code> to evaluate live models.</p>
+  </section>
+
   <section class="panel controls">
     <h2>Run an evaluation</h2>
     <div class="control-row">
@@ -98,6 +123,22 @@
         <tbody></tbody>
       </table>
     </div>
+  </section>
+
+  <section class="panel colophon" id="contribute">
+    <h2>Open source &amp; contributing</h2>
+    <p>LLMQA is MIT-licensed and built in the open. Issues, ideas, and pull
+      requests are welcome — new metrics, new providers, more golden-dataset
+      cases, or docs. The deterministic <code>mock</code> providers mean the full
+      test suite and CI gates run for free, without any API key.</p>
+    <ul class="colophon-links">
+      <li><a href="https://github.com/CHRISTIANSEBO/LLMQA" target="_blank" rel="noopener">Repository</a></li>
+      <li><a href="https://github.com/CHRISTIANSEBO/LLMQA/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">Contributing guide</a></li>
+      <li><a href="https://github.com/CHRISTIANSEBO/LLMQA/blob/main/CODE_OF_CONDUCT.md" target="_blank" rel="noopener">Code of conduct</a></li>
+      <li><a href="https://github.com/CHRISTIANSEBO/LLMQA/discussions" target="_blank" rel="noopener">Discussions</a></li>
+      <li><a href="https://github.com/CHRISTIANSEBO/LLMQA/blob/main/SECURITY.md" target="_blank" rel="noopener">Security policy</a></li>
+      <li><a href="https://github.com/CHRISTIANSEBO/LLMQA/blob/main/LICENSE" target="_blank" rel="noopener">MIT license</a></li>
+    </ul>
   </section>
 </main>
 
