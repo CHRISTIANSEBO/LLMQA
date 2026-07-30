@@ -30,6 +30,10 @@
 }
 
 * { box-sizing: border-box; }
+/* Skip link (a11y): hidden until focused. */
+.skip-link { position: absolute; left: -9999px; top: 0; background: var(--ink); color: #fff;
+  padding: 8px 14px; font-size: 13px; font-family: var(--mono); z-index: 100; border-radius: 0 0 3px 0; }
+.skip-link:focus { left: 0; }
 /* Keep native form controls in the ink palette (no default blue accent). */
 input[type=checkbox], select { accent-color: var(--ink); }
 body {
@@ -47,7 +51,8 @@ body {
   border-bottom: 3px double var(--rule-strong);
   background: var(--paper-edge);
 }
-.brand { display: flex; align-items: baseline; gap: 16px; }
+.brand { display: flex; align-items: baseline; gap: 16px; text-decoration: none; color: inherit; }
+.brand:hover h1 { color: var(--ink-2); }
 .logo {
   font-family: var(--mono); font-weight: 700; font-size: 15px; letter-spacing: 0.5px;
   border: 1.5px solid var(--ink); padding: 4px 8px; border-radius: 3px; align-self: center;
@@ -69,6 +74,7 @@ body {
 .topnav a { color: var(--ink); text-decoration: none; font-size: 13px; font-weight: 600;
   font-variant: small-caps; letter-spacing: 0.5px; border-bottom: 1px solid transparent; }
 .topnav a:hover { border-bottom-color: var(--ink); }
+.topnav a[aria-current="page"] { border-bottom-color: var(--ink); font-weight: 700; }
 .topnav a.gh-star { border: 1px solid var(--ink); border-radius: 3px; padding: 5px 12px;
   font-family: var(--mono); font-variant: normal; letter-spacing: 0.3px; }
 .topnav a.gh-star:hover { background: var(--ink); color: #fff; border-bottom-color: var(--ink); }
@@ -101,6 +107,71 @@ body {
 .colophon-links a:hover { color: var(--muted); border-bottom-color: var(--muted); }
 
 main { max-width: 1040px; margin: 0 auto; padding: 30px 22px 60px; }
+
+/* ---- Page head (interior pages: Dashboard/Docs/About) ---- */
+.page-head { margin-bottom: 30px; padding-bottom: 22px; border-bottom: 1px solid var(--rule); }
+.page-title { margin: 6px 0 12px; font-family: var(--serif); font-weight: 700;
+  font-size: 34px; letter-spacing: -0.5px; }
+.page-sub { margin: 0; font-family: var(--serif); font-size: 18px; line-height: 1.5;
+  color: var(--ink-2); max-width: 760px; }
+.page-sub a { color: var(--ink); text-decoration: none; border-bottom: 1px solid var(--rule-strong); }
+.page-sub a:hover { color: var(--muted); border-bottom-color: var(--muted); }
+
+/* ---- Home: how-it-works steps ---- */
+.steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 18px; }
+.steps li { display: flex; gap: 16px; align-items: flex-start; }
+.step-n { flex: none; width: 30px; height: 30px; border: 1.5px solid var(--ink);
+  border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  font-family: var(--mono); font-weight: 700; font-size: 14px; }
+.steps li div { font-size: 14.5px; color: var(--ink-2); line-height: 1.55; }
+.steps strong { color: var(--ink); }
+.steps code, .prose code, .cta-lead code { font-family: var(--mono); font-size: 12px;
+  background: var(--paper); border: 1px solid var(--rule); border-radius: 2px; padding: 0 4px; }
+
+/* ---- Home: feature grid ---- */
+.feature-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 26px; margin-bottom: 26px; }
+.feature { margin-bottom: 0; }
+.feature h3 { margin: 0 0 10px; font-family: var(--sans); font-size: 12px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 1.2px; color: var(--ink); }
+.feature p { margin: 0; font-size: 14px; color: var(--ink-2); line-height: 1.55; }
+.feature code { font-family: var(--mono); font-size: 12px; background: var(--paper);
+  border: 1px solid var(--rule); border-radius: 2px; padding: 0 4px; }
+
+/* ---- Home: CTA panel ---- */
+.cta-panel { text-align: center; }
+.cta-lead { margin: 0 0 20px; font-size: 15px; color: var(--ink-2); }
+.cta-row { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
+.cta-btn { text-decoration: none; display: inline-block; }
+.ghost-btn { display: inline-block; text-decoration: none; background: var(--paper-edge);
+  color: var(--ink); border: 1px solid var(--rule-strong); border-radius: 3px;
+  padding: 11px 22px; font-size: 14px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.8px; font-family: var(--sans); }
+.ghost-btn:hover { background: var(--ink); color: #fff; }
+.osbadge--cta { cursor: pointer; }
+
+/* ---- Docs: two-column layout + code blocks ---- */
+.docs-layout { display: grid; grid-template-columns: 200px 1fr; gap: 34px; align-items: start; }
+.docs-nav { position: sticky; top: 22px; border-right: 1px solid var(--rule); padding-right: 20px; }
+.docs-nav-title { margin: 0 0 12px; font-size: 10.5px; text-transform: uppercase;
+  letter-spacing: 1px; color: var(--muted); font-weight: 700; }
+.docs-nav ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.docs-nav a { color: var(--ink-2); text-decoration: none; font-size: 13px; font-family: var(--mono);
+  border-bottom: 1px solid transparent; }
+.docs-nav a:hover { color: var(--ink); border-bottom-color: var(--ink); }
+.docs-body { min-width: 0; }
+.docs-body .page-head { margin-top: 0; }
+.doc-section { scroll-margin-top: 20px; }
+.prose { margin: 0; font-size: 14.5px; color: var(--ink-2); line-height: 1.6; max-width: 760px; }
+.prose em { font-style: italic; }
+.doc-list { margin: 0; padding-left: 20px; display: grid; gap: 9px; }
+.doc-list li { font-size: 14px; color: var(--ink-2); line-height: 1.55; }
+.doc-list strong { color: var(--ink); font-family: var(--mono); font-size: 13px; }
+.doc-list code { font-family: var(--mono); font-size: 12px; background: var(--paper);
+  border: 1px solid var(--rule); border-radius: 2px; padding: 0 4px; }
+.code { background: var(--paper); border: 1px solid var(--rule-strong); border-radius: 4px;
+  padding: 14px 16px; overflow-x: auto; margin: 4px 0 14px; }
+.code code { font-family: var(--mono); font-size: 12.5px; color: var(--ink); line-height: 1.6;
+  white-space: pre; display: block; }
 
 /* ---- Panels: understated, hairline-ruled sections ---- */
 .panel {
@@ -264,4 +335,10 @@ footer { text-align: center; color: var(--muted); font-size: 12px; padding: 26px
   .card:nth-child(2) { border-right: none; }
   .card:nth-child(1), .card:nth-child(2) { border-bottom: 1px solid var(--rule); }
   .topbar h1 { font-size: 24px; }
+  .feature-grid { grid-template-columns: 1fr; gap: 20px; }
+  .docs-layout { grid-template-columns: 1fr; gap: 22px; }
+  .docs-nav { position: static; border-right: none; border-bottom: 1px solid var(--rule);
+    padding-right: 0; padding-bottom: 16px; }
+  .docs-nav ul { grid-template-columns: repeat(2, 1fr); }
+  .page-title { font-size: 27px; }
 }
