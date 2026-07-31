@@ -34,6 +34,7 @@
     <p class="page-sub">Run the golden dataset through a provider, compare two models
       side-by-side, and watch quality trend over time. This hosted demo is
       <strong>mock-only</strong> — deterministic, free, no API key.</p>
+    <button id="tourBtn" class="link-btn" type="button">▷ Take the 60-second tour</button>
   </section>
 
   <section class="panel controls">
@@ -54,6 +55,14 @@
     </fieldset>
     <button id="runBtn" class="run">Run evaluation</button>
     <span id="status" class="status" aria-live="polite"></span>
+    <div id="runProgress" class="run-progress" hidden aria-hidden="true">
+      <div class="rp-bar"><span id="rp-fill" class="rp-fill"></span></div>
+      <div class="rp-tally">
+        <span id="rp-count" class="rp-count">0 / 0</span>
+        <span class="rp-pass" id="rp-pass">✓ 0</span>
+        <span class="rp-fail" id="rp-fail">✕ 0</span>
+      </div>
+    </div>
   </section>
 
   <section class="cards" id="summary" hidden>
@@ -63,8 +72,28 @@
     <div class="card"><span class="k">Cost</span><span class="v" id="s-cost">—</span></div>
   </section>
 
+  <section class="panel empty-state" id="resultsEmpty">
+    <div class="empty-illo" aria-hidden="true">
+      <span class="empty-check">✓QA</span>
+      <div class="empty-skeleton">
+        <span></span><span></span><span></span><span></span>
+      </div>
+    </div>
+    <h2>No results yet</h2>
+    <p class="empty-lead">Pick a provider and metrics above, then <strong>Run evaluation</strong>.
+      Each case streams in live with a pass/fail verdict and a quality-gate readout.</p>
+    <p class="empty-note">This is a fresh session — nothing is pre-loaded. Your run, your results.</p>
+  </section>
+
   <section class="panel" id="resultsPanel" hidden>
-    <h2>Case results</h2>
+    <div class="panel-head-row">
+      <h2>Case results</h2>
+      <div class="dl-btns">
+        <button id="dl-md" class="mini-btn" type="button" title="Download this run as Markdown">↓ Markdown</button>
+        <button id="dl-json" class="mini-btn" type="button" title="Download this run as JSON">↓ JSON</button>
+      </div>
+    </div>
+    <p id="verdict" class="verdict" hidden></p>
     <p class="hint">Bold metric = gates this case's pass/fail. Others are informational — a case can PASS with a low non-gating score (e.g. a summary shouldn't fail on exact string match).</p>
     <div id="tagFilter" class="tag-filter-bar" aria-label="Filter by tag"></div>
     <div class="legend" aria-label="score legend">
@@ -91,8 +120,10 @@
         <select id="cmp-b"></select>
       </label>
       <button id="cmpBtn" class="run">Compare</button>
+      <button id="raceBtn" class="run run-alt" type="button" title="Watch both providers race case-by-case">🏁 Race mode</button>
       <span id="cmp-status" class="status" aria-live="polite"></span>
     </div>
+    <div id="raceArena" class="race-arena" hidden aria-label="provider race"></div>
     <div id="cmp-results" hidden>
       <div class="cmp-summary" id="cmp-summary"></div>
       <div id="cmp-chart" class="cmp-chart" aria-label="comparison chart"></div>
@@ -108,6 +139,16 @@
   <section class="panel">
     <h2>Quality trend</h2>
     <div id="trend" class="trend">No history yet — run an evaluation.</div>
+    <div class="hist-compare">
+      <p class="hint">Drag any two runs from the table below into the slots to diff them.</p>
+      <div class="slot-row">
+        <div class="drop-slot" id="slotA" data-slot="A"><span class="slot-label">Run A</span><span class="slot-hint">drag a run here</span></div>
+        <span class="slot-vs">vs</span>
+        <div class="drop-slot" id="slotB" data-slot="B"><span class="slot-label">Run B</span><span class="slot-hint">drag a run here</span></div>
+        <button id="slotClear" class="mini-btn" type="button" hidden>clear</button>
+      </div>
+      <div id="histDiff" class="hist-diff" hidden></div>
+    </div>
     <div class="table-wrap">
       <table id="history">
         <thead><tr><th>#</th><th>When</th><th>Provider / model</th><th>Pass</th><th>Avg</th><th>Cost</th></tr></thead>
@@ -115,9 +156,35 @@
       </table>
     </div>
   </section>
+  <section class="panel">
+    <details id="datasetPeek" class="peek">
+      <summary>Peek at the golden dataset <span class="peek-count" id="peek-count"></span></summary>
+      <p class="hint">Each case declares which metric(s) <em>gate</em> its pass/fail. That's why a
+        verbose-but-correct summary can still PASS — it's gated on the judge, not exact string match.</p>
+      <div id="peek-list" class="peek-list"></div>
+    </details>
+  </section>
 </main>
 
 <footer>LLMQA v0.2 · open-source LLM evaluation harness · MIT licensed · maintained by <a href="https://github.com/CHRISTIANSEBO" target="_blank" rel="noopener">@CHRISTIANSEBO</a></footer>
+
+<div id="tour" class="tour" hidden>
+  <div class="tour-scrim"></div>
+  <div class="tour-bubble" role="dialog" aria-modal="true" aria-labelledby="tour-title">
+    <p class="tour-step" id="tour-step"></p>
+    <h3 id="tour-title"></h3>
+    <p id="tour-body"></p>
+    <div class="tour-actions">
+      <button id="tour-skip" class="link-btn" type="button">Skip</button>
+      <div class="tour-nav">
+        <button id="tour-prev" class="mini-btn" type="button">Back</button>
+        <button id="tour-next" class="run" type="button">Next</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="tip" class="tip" role="tooltip" hidden></div>
 
 <script src="/assets/app.js"></script>
 </body>

@@ -1,4 +1,5 @@
 """Smoke tests for the FastAPI dashboard backend (mock provider only)."""
+import json
 import os
 import tempfile
 
@@ -39,6 +40,21 @@ def test_unknown_page_falls_back_to_home():
     assert "How it works" in r.text
 
 
+def test_startup_does_not_seed(monkeypatch, tmp_path):
+    """Always-fresh: app startup must NOT auto-populate the DB with preset runs.
+
+    Uses a throwaway DB and runs the real lifespan (context-managed client);
+    a fresh install must report an empty run history.
+    """
+    from llmqa.web import app as web_app
+
+    fresh_db = str(tmp_path / "fresh.db")
+    monkeypatch.setattr(web_app, "DB_PATH", fresh_db)
+    with TestClient(web_app.app) as c:  # entering the context runs lifespan
+        runs = c.get("/api/history").json()["runs"]
+    assert runs == [], "startup must not seed preset runs"
+
+
 def test_health():
     r = client.get("/api/health")
     assert r.status_code == 200
@@ -73,6 +89,42 @@ def test_run_mock_and_persist_and_fetch():
     d = client.get(f"/api/runs/{run_id}")
     assert d.status_code == 200
     assert d.json()["detail"]["results"]
+
+
+def test_run_case_ids_filter_runs_only_that_case():
+    # Grab a real case id from the config, then run only that one.
+    cfg = client.get("/api/config").json()
+    assert cfg["cases"], "expected a non-empty golden dataset"
+    target = cfg["cases"][0]["id"]
+
+    r = client.post(
+        "/api/run",
+        json={"provider": "mock", "case_ids": [target], "store": False},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    ids = [c["case_id"] for c in body["results"]]
+    assert ids == [target]
+    assert body["run_id"] is None  # store=False must not persist
+
+
+def test_run_stream_respects_case_ids():
+    cfg = client.get("/api/config").json()
+    target = cfg["cases"][0]["id"]
+    with client.stream(
+        "POST",
+        "/api/run/stream",
+        json={"provider": "mock", "case_ids": [target], "store": False},
+    ) as resp:
+        assert resp.status_code == 200
+        case_ids = []
+        for line in resp.iter_lines():
+            if not line or not line.startswith("data: "):
+                continue
+            evt = json.loads(line[6:])
+            if evt.get("type") == "case":
+                case_ids.append(evt["result"]["case_id"])
+    assert case_ids == [target]
 
 
 def test_run_anthropic_without_key_is_rejected():

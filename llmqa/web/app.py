@@ -28,7 +28,6 @@ from pydantic import BaseModel, Field
 from ..metrics import REGISTRY, build_metric
 from ..providers import MOCK_PROVIDERS, get_provider
 from ..runner import iter_eval, load_dataset, run_eval
-from ..seed import seed_if_empty
 from ..store import DEFAULT_DB, get_run, list_runs, save_run
 
 ROOT = Path(__file__).resolve().parent
@@ -39,11 +38,9 @@ DB_PATH = os.environ.get("LLMQA_DB", str(REPO_ROOT / "llmqa_runs.db"))
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    """Seed the DB with historical mock runs on first boot so the trend chart
-    is never empty for a first-time visitor."""
-    inserted = seed_if_empty(DEFAULT_DATASET, DB_PATH)
-    if inserted:
-        print(f"[llmqa] Seeded {inserted} historical runs into {DB_PATH}")
+    """No startup seeding by design: the dashboard always starts fresh so every
+    visit reflects only the runs you actually trigger — no preset/demo runs.
+    The trend chart fills in from your own runs as you go."""
     yield  # application runs here
 
 
@@ -104,6 +101,7 @@ class RunRequest(BaseModel):
         default_factory=lambda: ["exact_match", "similarity", "llm_judge", "hallucination"]
     )
     tags: list[str] | None = None
+    case_ids: list[str] | None = None
     dataset: str | None = None
     store: bool = True
 
@@ -187,7 +185,7 @@ def run(req: RunRequest) -> dict:
             metrics.append(build_metric(name))
 
     dataset = req.dataset or DEFAULT_DATASET
-    eval_run = run_eval(dataset, provider, metrics, tags=req.tags)
+    eval_run = run_eval(dataset, provider, metrics, tags=req.tags, case_ids=req.case_ids)
 
     run_id = save_run(eval_run, DB_PATH) if req.store else None
 
@@ -229,7 +227,7 @@ def run_stream(req: RunRequest):
 
     def _event_gen():
         run = None
-        for run, cr in iter_eval(dataset_path, provider, metrics, req.tags):
+        for run, cr in iter_eval(dataset_path, provider, metrics, req.tags, req.case_ids):
             case_data = cr.model_dump()
             case_data["passed"] = cr.passed
             yield f"data: {_json.dumps({'type': 'case', 'result': case_data})}\n\n"
