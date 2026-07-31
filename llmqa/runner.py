@@ -22,6 +22,7 @@ def iter_eval(
     provider: Provider,
     metrics: list[Metric],
     tags: list[str] | None = None,
+    case_ids: list[str] | None = None,
 ) -> Generator[tuple[EvalRun, CaseResult], None, None]:
     """Yield (run, case_result) incrementally as each case completes.
 
@@ -29,11 +30,18 @@ def iter_eval(
     inspect cumulative state (cost, results so far) at each step. Both
     ``run_eval`` (batch) and the SSE streaming endpoint use this as their
     shared core loop.
+
+    ``tags`` filters to cases carrying any of the given tags; ``case_ids``
+    filters to specific case ids (used by the dashboard's inline single-case
+    re-run). When both are given, a case must satisfy both filters.
     """
     cases = load_dataset(dataset_path)
     if tags:
         wanted = set(tags)
         cases = [c for c in cases if wanted & set(c.tags)]
+    if case_ids:
+        wanted_ids = set(case_ids)
+        cases = [c for c in cases if c.id in wanted_ids]
 
     run = EvalRun(
         dataset=str(dataset_path),
@@ -62,10 +70,11 @@ def run_eval(
     provider: Provider,
     metrics: list[Metric],
     tags: list[str] | None = None,
+    case_ids: list[str] | None = None,
 ) -> EvalRun:
     """Run every case and return the completed EvalRun. Thin wrapper over iter_eval."""
     run = None
-    for run, _ in iter_eval(dataset_path, provider, metrics, tags):
+    for run, _ in iter_eval(dataset_path, provider, metrics, tags, case_ids):
         pass
     if run is None:  # empty dataset or all cases filtered out
         run = EvalRun(

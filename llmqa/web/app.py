@@ -101,6 +101,7 @@ class RunRequest(BaseModel):
         default_factory=lambda: ["exact_match", "similarity", "llm_judge", "hallucination"]
     )
     tags: list[str] | None = None
+    case_ids: list[str] | None = None
     dataset: str | None = None
     store: bool = True
 
@@ -184,7 +185,7 @@ def run(req: RunRequest) -> dict:
             metrics.append(build_metric(name))
 
     dataset = req.dataset or DEFAULT_DATASET
-    eval_run = run_eval(dataset, provider, metrics, tags=req.tags)
+    eval_run = run_eval(dataset, provider, metrics, tags=req.tags, case_ids=req.case_ids)
 
     run_id = save_run(eval_run, DB_PATH) if req.store else None
 
@@ -226,7 +227,7 @@ def run_stream(req: RunRequest):
 
     def _event_gen():
         run = None
-        for run, cr in iter_eval(dataset_path, provider, metrics, req.tags):
+        for run, cr in iter_eval(dataset_path, provider, metrics, req.tags, req.case_ids):
             case_data = cr.model_dump()
             case_data["passed"] = cr.passed
             yield f"data: {_json.dumps({'type': 'case', 'result': case_data})}\n\n"

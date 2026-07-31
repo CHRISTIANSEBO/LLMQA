@@ -1,4 +1,5 @@
 """Smoke tests for the FastAPI dashboard backend (mock provider only)."""
+import json
 import os
 import tempfile
 
@@ -88,6 +89,42 @@ def test_run_mock_and_persist_and_fetch():
     d = client.get(f"/api/runs/{run_id}")
     assert d.status_code == 200
     assert d.json()["detail"]["results"]
+
+
+def test_run_case_ids_filter_runs_only_that_case():
+    # Grab a real case id from the config, then run only that one.
+    cfg = client.get("/api/config").json()
+    assert cfg["cases"], "expected a non-empty golden dataset"
+    target = cfg["cases"][0]["id"]
+
+    r = client.post(
+        "/api/run",
+        json={"provider": "mock", "case_ids": [target], "store": False},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    ids = [c["case_id"] for c in body["results"]]
+    assert ids == [target]
+    assert body["run_id"] is None  # store=False must not persist
+
+
+def test_run_stream_respects_case_ids():
+    cfg = client.get("/api/config").json()
+    target = cfg["cases"][0]["id"]
+    with client.stream(
+        "POST",
+        "/api/run/stream",
+        json={"provider": "mock", "case_ids": [target], "store": False},
+    ) as resp:
+        assert resp.status_code == 200
+        case_ids = []
+        for line in resp.iter_lines():
+            if not line or not line.startswith("data: "):
+                continue
+            evt = json.loads(line[6:])
+            if evt.get("type") == "case":
+                case_ids.append(evt["result"]["case_id"])
+    assert case_ids == [target]
 
 
 def test_run_anthropic_without_key_is_rejected():

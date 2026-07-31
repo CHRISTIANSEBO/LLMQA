@@ -349,6 +349,142 @@ td.latency { color: var(--muted); font-size: 13px; font-family: var(--mono); fon
 footer { text-align: center; color: var(--muted); font-size: 12px; padding: 26px;
   border-top: 3px double var(--rule-strong); font-variant: small-caps; letter-spacing: 0.5px; }
 
+/* =====================================================================
+   Interactive dashboard extras (progress, verdict, downloads, peek,
+   race mode, history diff, guided tour). Same ink-on-paper palette;
+   color stays reserved for test state.
+   ===================================================================== */
+
+/* Small ghost/link buttons reused across the new UI. */
+.mini-btn { background: var(--paper); border: 1px solid var(--rule-strong); color: var(--ink);
+  border-radius: 3px; padding: 5px 11px; font-size: 12px; cursor: pointer; font-family: var(--mono);
+  letter-spacing: 0.2px; }
+.mini-btn:hover { background: var(--ink); color: #fff; }
+.mini-btn:disabled { opacity: 0.4; cursor: not-allowed; background: var(--paper); color: var(--muted); }
+.link-btn { background: none; border: none; color: var(--ink); font-family: var(--mono); font-size: 13px;
+  cursor: pointer; padding: 4px 0; border-bottom: 1px solid var(--rule-strong); margin-top: 12px; }
+.link-btn:hover { color: var(--muted); border-bottom-color: var(--muted); }
+/* Secondary action button (race) — outlined rather than solid ink. */
+.run.run-alt { background: var(--paper-edge); color: var(--ink); }
+.run.run-alt:hover { background: var(--ink); color: #fff; }
+
+/* Live run progress bar. */
+.run-progress { margin-top: 16px; max-width: 460px; }
+.rp-bar { height: 8px; background: var(--paper); border: 1px solid var(--rule-strong);
+  border-radius: 4px; overflow: hidden; }
+.rp-fill { display: block; height: 100%; width: 0; background: var(--ink); transition: width 0.25s ease; }
+.rp-tally { display: flex; gap: 16px; margin-top: 7px; font-family: var(--mono); font-size: 12px;
+  color: var(--muted); font-variant-numeric: tabular-nums; }
+.rp-pass { color: var(--pass); }
+.rp-fail { color: var(--fail); }
+
+/* Verdict line above the case table. */
+.verdict { margin: 0 0 14px; font-size: 14px; font-family: var(--mono); padding: 10px 14px;
+  border-radius: 3px; border: 1px solid var(--rule-strong); background: var(--paper); }
+.verdict.ok { box-shadow: inset 3px 0 0 var(--pass); }
+.verdict.warn { box-shadow: inset 3px 0 0 var(--warn); }
+.verdict .v-fail { color: var(--fail); font-weight: 700; }
+
+/* Results panel header row with download buttons. */
+.panel-head-row { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  flex-wrap: wrap; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 1px solid var(--rule); }
+.panel-head-row h2 { margin: 0; border: none; padding: 0; }
+.dl-btns { display: flex; gap: 8px; }
+
+/* Single-case re-run affordance inside an expanded detail row. */
+.detail-actions { display: flex; align-items: center; gap: 12px; padding: 0 18px 14px; background: var(--paper); }
+.rerun-status { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+@keyframes flashrow { 0% { background: var(--warn-bg); } 100% { background: transparent; } }
+tr.result-row.flash { animation: flashrow 1.1s ease-out; }
+
+/* Race arena — two streaming lanes. */
+.race-arena { display: grid; gap: 14px; margin: 6px 0 18px; }
+.race-lane { border: 1px solid var(--rule); border-radius: 4px; padding: 12px 14px; background: var(--paper); }
+.race-lane-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 8px; }
+.race-prov { font-family: var(--mono); font-weight: 700; font-size: 14px; }
+.race-tally { font-family: var(--mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.race-track { height: 6px; background: var(--paper-edge); border: 1px solid var(--rule-strong);
+  border-radius: 3px; overflow: hidden; }
+.race-fill { display: block; height: 100%; width: 0; background: var(--ink); transition: width 0.2s linear; }
+.race-chips { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 10px; }
+.race-chip { font-family: var(--mono); font-size: 11px; font-weight: 900; width: 18px; height: 18px;
+  display: inline-flex; align-items: center; justify-content: center; border-radius: 3px; border: 1px solid; }
+.race-chip.ok { color: var(--pass); background: var(--pass-bg); border-color: var(--pass); }
+.race-chip.bad { color: var(--fail); background: var(--fail-bg); border-color: var(--fail); }
+.race-winner { font-family: var(--mono); font-size: 14px; text-align: center; padding: 10px;
+  border: 1px solid var(--rule-strong); border-radius: 4px; background: var(--paper-edge); }
+
+/* History diff slots. */
+.hist-compare { margin: 18px 0 8px; padding: 16px; border: 1px dashed var(--rule-strong);
+  border-radius: 4px; background: var(--paper); }
+.slot-row { display: flex; align-items: stretch; gap: 12px; flex-wrap: wrap; margin-top: 6px; }
+.drop-slot { flex: 1 1 200px; min-height: 62px; border: 1.5px dashed var(--rule-strong); border-radius: 4px;
+  background: var(--paper-edge); display: flex; flex-direction: column; justify-content: center;
+  gap: 3px; padding: 10px 14px; }
+.drop-slot.over { border-style: solid; background: var(--warn-bg); }
+.drop-slot.filled { border-style: solid; }
+.slot-label { font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--ink); }
+.slot-hint { font-size: 11.5px; color: var(--muted); font-style: italic; }
+.slot-meta { font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
+.slot-vs { align-self: center; color: var(--muted); font-style: italic; font-size: 13px; }
+.hist-row { cursor: pointer; }
+.hist-row.dragging { opacity: 0.4; }
+.hist-row.selected { background: var(--warn-bg); }
+.hist-diff { margin-top: 16px; }
+.diff-head { display: flex; flex-wrap: wrap; align-items: center; gap: 18px; margin-bottom: 14px;
+  padding-bottom: 12px; border-bottom: 1px solid var(--rule); }
+.diff-run { font-family: var(--mono); font-weight: 700; font-size: 14px; }
+.diff-stat { display: flex; flex-direction: column; gap: 2px; }
+.diff-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); }
+.diff-val { font-family: var(--mono); font-weight: 700; font-variant-numeric: tabular-nums; }
+.diff-val.pos { color: var(--pass); }
+.diff-val.neg { color: var(--fail); }
+.diff-val.neu { color: var(--muted); }
+.diff-flips { display: grid; gap: 8px; }
+.diff-flip { display: flex; align-items: center; gap: 8px; }
+.diff-flip .diff-arrow { color: var(--muted); }
+.diff-cid { font-family: var(--mono); font-size: 12px; margin-left: 4px; }
+.diff-flip.gained .diff-cid { color: var(--pass); }
+.diff-flip.lost .diff-cid { color: var(--fail); }
+
+/* Dataset peek (collapsible). */
+.peek > summary { cursor: pointer; font-family: var(--sans); font-size: 12px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 1.5px; color: var(--ink); }
+.peek-count { font-family: var(--mono); font-weight: 400; text-transform: none; letter-spacing: 0;
+  color: var(--muted); margin-left: 6px; }
+.peek-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; margin-top: 14px; }
+.peek-item { border: 1px solid var(--rule); border-radius: 4px; padding: 10px 12px; background: var(--paper); }
+.peek-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 6px; }
+.peek-id { font-family: var(--mono); font-weight: 700; font-size: 12.5px; color: var(--ink); }
+.peek-in { font-size: 12.5px; color: var(--ink-2); line-height: 1.5; margin-bottom: 6px;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.peek-gate { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.peek-gate code { background: var(--paper-edge); border: 1px solid var(--rule); border-radius: 2px; padding: 0 4px; }
+.peek-allgate { font-style: italic; }
+
+/* Guided tour overlay. */
+.tour[hidden] { display: none; }
+/* Transparent — it only blocks clicks on the page behind the tour. All the
+   dimming is done by the highlight ring's spotlight box-shadow below, so the
+   ring's interior (the target) stays fully lit. */
+.tour-scrim { position: fixed; inset: 0; background: transparent; z-index: 90; }
+/* The ring's giant outer box-shadow is the real spotlight: it darkens the whole
+   page while leaving the ring's interior (the target control) at full brightness. */
+.tip { position: absolute; z-index: 92; border: 2px solid #fff;
+  box-shadow: 0 0 0 3px var(--ink), 0 0 0 9999px rgba(17,17,17,0.55);
+  border-radius: 5px; pointer-events: none; transition: all 0.18s ease; }
+.tour-bubble { position: fixed; z-index: 93; left: 50%; bottom: 28px; transform: translateX(-50%);
+  width: min(460px, 92vw); background: var(--paper-edge); border: 1px solid var(--rule-strong);
+  border-radius: 6px; padding: 18px 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.28); }
+.tour-step { margin: 0 0 4px; font-family: var(--mono); font-size: 11px; text-transform: uppercase;
+  letter-spacing: 1px; color: var(--muted); }
+.tour-bubble h3 { margin: 0 0 8px; font-family: var(--serif); font-size: 20px; }
+.tour-bubble p#tour-body { margin: 0 0 16px; font-size: 14px; color: var(--ink-2); line-height: 1.55; }
+.tour-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.tour-actions .link-btn { margin-top: 0; }
+.tour-nav { display: flex; gap: 8px; }
+.tour-nav .run { padding: 8px 16px; }
+
 @media (max-width: 720px) {
   .cards { grid-template-columns: repeat(2, 1fr); }
   .card:nth-child(2) { border-right: none; }
