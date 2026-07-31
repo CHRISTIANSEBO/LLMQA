@@ -1,13 +1,16 @@
-# Example: gate a pull request on LLM quality using the LLMQA action.
+# TEMPLATE: gate a pull request on LLM quality using the LLMQA action.
 # Copy this into your own repo's .github/workflows/ and point `dataset` at your
 # golden set. Real providers read their key from a repo secret; the mock
 # provider needs no key and keeps CI free and deterministic.
+#
+# In this repo it is manual-only (workflow_dispatch) so it doesn't gate LLMQA's
+# own PRs. In YOUR repo, uncomment the pull_request trigger below.
 name: llmqa-gate-example
 
 on:
   workflow_dispatch: {}
-  pull_request:
-    branches: [main]
+  # pull_request:
+  #   branches: [main]
 
 permissions:
   contents: read
