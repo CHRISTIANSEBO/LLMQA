@@ -27,6 +27,24 @@ def test_pages_served():
         assert marker in r.text, f"{marker!r} missing from {path}"
 
 
+def test_every_page_has_theme_toggle_and_no_flash_script():
+    """Light/dark theming must be wired on every page: the pre-paint no-flash
+    snippet, the masthead toggle button, and the shared theme.js."""
+    for path in ("/", "/dashboard", "/docs", "/about"):
+        html = client.get(path).text
+        assert 'id="theme-toggle"' in html, f"toggle missing from {path}"
+        assert "/assets/theme.js" in html, f"theme.js missing from {path}"
+        assert 'localStorage.getItem("llmqa-theme")' in html, f"no-flash snippet missing from {path}"
+
+
+def test_theme_assets_served():
+    """The theme script is reachable and the CSS defines a dark palette."""
+    assert client.get("/assets/theme.js").status_code == 200
+    css = client.get("/assets/app.css").text
+    assert '[data-theme="dark"]' in css
+    assert "prefers-color-scheme: dark" in css
+
+
 def test_api_docs_not_shadowed_by_docs_page():
     """The site's /docs page must not clobber the OpenAPI schema/UI."""
     assert client.get("/api/openapi.json").status_code == 200
