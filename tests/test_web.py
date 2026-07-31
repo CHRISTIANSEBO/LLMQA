@@ -45,6 +45,19 @@ def test_theme_assets_served():
     assert "prefers-color-scheme: dark" in css
 
 
+def test_brand_logo_variants_wired_and_served():
+    """Every page shows both brand-logo variants (light/dark), and both SVGs
+    plus the favicon are served."""
+    for path in ("/", "/dashboard", "/docs", "/about"):
+        html = client.get(path).text
+        assert "/assets/logo-light.svg" in html, f"light logo missing from {path}"
+        assert "/assets/logo-dark.svg" in html, f"dark logo missing from {path}"
+    for asset in ("/assets/logo-light.svg", "/assets/logo-dark.svg", "/assets/favicon.svg"):
+        r = client.get(asset)
+        assert r.status_code == 200, asset
+        assert "svg" in r.text[:200].lower(), asset
+
+
 def test_api_docs_not_shadowed_by_docs_page():
     """The site's /docs page must not clobber the OpenAPI schema/UI."""
     assert client.get("/api/openapi.json").status_code == 200
