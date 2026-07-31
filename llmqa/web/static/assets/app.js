@@ -34,27 +34,19 @@ async function init() {
   $("#runBtn").addEventListener("click", runEval);
   initCompare(cfg.all_providers);
   await loadHistory();
-  await loadLatestRun();
+  // Always start fresh: no preset runs and no auto-loaded previous run. The
+  // results area shows an empty-state prompt until you trigger a run yourself.
+  showEmptyState();
 }
 
-// On first load, show the most recent stored run so the page isn't empty.
-async function loadLatestRun() {
-  try {
-    const { runs } = await api("/api/history?limit=1");
-    if (!runs.length) return;
-    const full = await api(`/api/runs/${runs[0].id}`);
-    if (full.detail) {
-      const run = full.detail;
-      // The stored detail lacks computed aggregates; take them from the summary.
-      run.provider = full.provider;
-      run.model = full.model;
-      run.pass_rate = full.pass_rate;
-      run.avg_score = full.avg_score;
-      run.total_cost_usd = full.cost_usd;
-      renderRun(run);
-      $("#status").textContent = `Showing saved run #${full.id}`;
-    }
-  } catch (_) { /* non-fatal */ }
+// Friendly "nothing here yet" prompt shown before the first run so the page
+// never looks broken or blank on arrival.
+function showEmptyState() {
+  const panel = $("#resultsPanel");
+  const empty = $("#resultsEmpty");
+  if (empty) empty.hidden = false;
+  if (panel) panel.hidden = true;
+  $("#summary").hidden = true;
 }
 
 function selectedMetrics() {
@@ -67,6 +59,8 @@ async function runEval() {
   btn.disabled = true;
 
   // Reset UI for a fresh streaming run
+  const emptyState = $("#resultsEmpty");
+  if (emptyState) emptyState.hidden = true;
   $("#summary").hidden = true;
   $("#resultsPanel").hidden = false;
   $("#results tbody").innerHTML = "";

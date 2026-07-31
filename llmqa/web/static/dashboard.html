@@ -63,6 +63,19 @@
     <div class="card"><span class="k">Cost</span><span class="v" id="s-cost">—</span></div>
   </section>
 
+  <section class="panel empty-state" id="resultsEmpty">
+    <div class="empty-illo" aria-hidden="true">
+      <span class="empty-check">✓QA</span>
+      <div class="empty-skeleton">
+        <span></span><span></span><span></span><span></span>
+      </div>
+    </div>
+    <h2>No results yet</h2>
+    <p class="empty-lead">Pick a provider and metrics above, then <strong>Run evaluation</strong>.
+      Each case streams in live with a pass/fail verdict and a quality-gate readout.</p>
+    <p class="empty-note">This is a fresh session — nothing is pre-loaded. Your run, your results.</p>
+  </section>
+
   <section class="panel" id="resultsPanel" hidden>
     <h2>Case results</h2>
     <p class="hint">Bold metric = gates this case's pass/fail. Others are informational — a case can PASS with a low non-gating score (e.g. a summary shouldn't fail on exact string match).</p>

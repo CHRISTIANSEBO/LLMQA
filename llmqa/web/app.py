@@ -28,7 +28,6 @@ from pydantic import BaseModel, Field
 from ..metrics import REGISTRY, build_metric
 from ..providers import MOCK_PROVIDERS, get_provider
 from ..runner import iter_eval, load_dataset, run_eval
-from ..seed import seed_if_empty
 from ..store import DEFAULT_DB, get_run, list_runs, save_run
 
 ROOT = Path(__file__).resolve().parent
@@ -39,11 +38,9 @@ DB_PATH = os.environ.get("LLMQA_DB", str(REPO_ROOT / "llmqa_runs.db"))
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    """Seed the DB with historical mock runs on first boot so the trend chart
-    is never empty for a first-time visitor."""
-    inserted = seed_if_empty(DEFAULT_DATASET, DB_PATH)
-    if inserted:
-        print(f"[llmqa] Seeded {inserted} historical runs into {DB_PATH}")
+    """No startup seeding by design: the dashboard always starts fresh so every
+    visit reflects only the runs you actually trigger — no preset/demo runs.
+    The trend chart fills in from your own runs as you go."""
     yield  # application runs here
 
 
