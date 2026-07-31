@@ -13,28 +13,29 @@ ships as a single service (good for Railway).
 """
 from __future__ import annotations
 
+import json as _json
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-import json as _json
-
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from ..metrics import REGISTRY, build_metric
 from ..providers import MOCK_PROVIDERS, get_provider
 from ..runner import iter_eval, load_dataset, run_eval
 from ..seed import seed_if_empty
-from ..store import DEFAULT_DB, get_run, list_runs, save_run
+from ..store import get_run, list_runs, save_run
+from .security import check_provider_allowed, guard_mutation, resolve_dataset
 
 ROOT = Path(__file__).resolve().parent
 STATIC_DIR = ROOT / "static"
 REPO_ROOT = ROOT.parent.parent
-DEFAULT_DATASET = str(REPO_ROOT / "datasets" / "qa_golden.yaml")
+DATASETS_DIR = REPO_ROOT / "datasets"
+DEFAULT_DATASET = str(DATASETS_DIR / "qa_golden.yaml")
 DB_PATH = os.environ.get("LLMQA_DB", str(REPO_ROOT / "llmqa_runs.db"))
 
 @asynccontextmanager
@@ -54,14 +55,20 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS is env-configurable so a split frontend/backend deploy still works.
-_origins = os.environ.get("ALLOWED_ORIGINS", "*").split(",")
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[o.strip() for o in _origins],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# CORS is locked down by default: the dashboard frontend is served by this same
+# app (same-origin), so no cross-origin access is needed. Set ALLOWED_ORIGINS
+# (comma-separated) only for an intentional split frontend/backend deploy.
+# We deliberately do NOT default to "*" so a public deploy isn't callable from
+# arbitrary origins.
+_origins_env = os.environ.get("ALLOWED_ORIGINS", "").strip()
+_origins = [o.strip() for o in _origins_env.split(",") if o.strip()]
+if _origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=_origins,
+        allow_methods=["GET", "POST"],
+        allow_headers=["Authorization", "Content-Type", "X-API-Token"],
+    )
 
 
 # Provider instances are reused across requests so the in-memory response
@@ -161,7 +168,8 @@ def run_detail(run_id: int) -> dict:
 
 
 @app.post("/api/run")
-def run(req: RunRequest) -> dict:
+def run(req: RunRequest, request: Request) -> dict:
+    guard_mutation(request, provider=req.provider)
     if req.provider == "anthropic" and not os.environ.get("ANTHROPIC_API_KEY"):
         raise HTTPException(
             status_code=400,
@@ -181,7 +189,7 @@ def run(req: RunRequest) -> dict:
         else:
             metrics.append(build_metric(name))
 
-    dataset = req.dataset or DEFAULT_DATASET
+    dataset = resolve_dataset(req.dataset, DEFAULT_DATASET, DATASETS_DIR)
     eval_run = run_eval(dataset, provider, metrics, tags=req.tags)
 
     run_id = save_run(eval_run, DB_PATH) if req.store else None
@@ -192,19 +200,20 @@ def run(req: RunRequest) -> dict:
     payload["score_by_metric"] = eval_run.score_by_metric()
     payload["run_id"] = run_id
     # `passed` is a computed property, so inject it per case for the frontend.
-    for case_payload, case_result in zip(payload["results"], eval_run.results):
+    for case_payload, case_result in zip(payload["results"], eval_run.results, strict=False):
         case_payload["passed"] = case_result.passed
     return payload
 
 
 @app.post("/api/run/stream")
-def run_stream(req: RunRequest):
+def run_stream(req: RunRequest, request: Request):
     """Stream case results via Server-Sent Events as each case completes.
 
     Each SSE event is JSON with a ``type`` field:
     - ``{"type": "case", "result": <CaseResult>}``  — one per completed case
     - ``{"type": "done", "pass_rate": ..., "avg_score": ..., ...}`` — final summary
     """
+    guard_mutation(request, provider=req.provider)
     try:
         provider = _get_cached_provider(req.provider)
     except Exception as exc:
@@ -219,12 +228,13 @@ def run_stream(req: RunRequest):
         else:
             metrics.append(build_metric(name))
 
-    dataset_path = req.dataset or DEFAULT_DATASET
+    dataset_path = resolve_dataset(req.dataset, DEFAULT_DATASET, DATASETS_DIR)
     store = req.store
 
     def _event_gen():
         run = None
-        for run, cr in iter_eval(dataset_path, provider, metrics, req.tags):
+        for run, cr in iter_eval(dataset_path, provider, metrics, req.tags):  # noqa: B007 - keep last run
+
             case_data = cr.model_dump()
             case_data["passed"] = cr.passed
             yield f"data: {_json.dumps({'type': 'case', 'result': case_data})}\n\n"
@@ -247,9 +257,13 @@ def run_stream(req: RunRequest):
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 @app.post("/api/compare")
-def compare(req: CompareRequest) -> dict:
+def compare(req: CompareRequest, request: Request) -> dict:
     """Run the same dataset through multiple providers and return all results
     keyed by provider name for side-by-side comparison."""
+    guard_mutation(request)
+    for prov_name in req.providers:
+        check_provider_allowed(prov_name)
+
     all_runs: dict[str, dict] = {}
 
     for prov_name in req.providers:
@@ -273,7 +287,7 @@ def compare(req: CompareRequest) -> dict:
         payload["pass_rate"] = eval_run.pass_rate
         payload["avg_score"] = eval_run.avg_score
         payload["score_by_metric"] = eval_run.score_by_metric()
-        for case_payload, case_result in zip(payload["results"], eval_run.results):
+        for case_payload, case_result in zip(payload["results"], eval_run.results, strict=False):
             case_payload["passed"] = case_result.passed
         all_runs[prov_name] = payload
 
