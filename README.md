@@ -107,15 +107,56 @@ python cli.py run [options]
 
   --dataset PATH             Golden dataset (default: datasets/qa_golden.yaml)
   --provider NAME            mock | anthropic | openai | xai/grok (default: mock)
+  --judge-provider NAME      Separate model for llm_judge/hallucination
+                             (avoids a model grading its own output)
   --metrics M [M ...]        exact_match similarity llm_judge hallucination
   --tags T [T ...]           Only run cases with these tags (e.g. rag adversarial)
-  --min-pass-rate FLOAT      Quality gate: exit 1 if pass rate is below this
-  --regression               Compare to the last stored run
+
+  # Quality gates (any failing gate exits 1)
+  --min-pass-rate FLOAT      Overall pass-rate gate
+  --min-tag-pass-rate TAG=R  Per-tag pass-rate gates, e.g. rag=0.9 adversarial=0.8
+  --min-metric-score M=S     Per-metric average-score gates, e.g. llm_judge=0.7
+  --max-avg-latency-ms FLOAT Latency budget (average case latency)
+  --max-p95-latency-ms FLOAT Latency budget (p95 case latency)
+  --max-cost FLOAT           Cost budget (total run cost, USD)
+
+  # Regression / baselines
+  --regression               Compare to a stored baseline run
+  --regression-baseline LBL  Compare to the latest run labeled LBL (default: last run)
   --regression-tolerance F   Allowed avg-score drop before failing (default: 0.05)
+  --label LBL                Tag this stored run with a label (e.g. baseline)
+
   --markdown PATH            Also write a Markdown report to PATH
   --db PATH                  SQLite run history (default: llmqa_runs.db)
   --no-store                 Don't persist this run
   --no-cache                 Disable the in-memory response cache
+```
+
+### Determinism & reliability
+
+Because a QA harness has to be reproducible, live providers run at
+`temperature=0` with a fixed `seed` (OpenAI/xAI) and a request timeout. Transient
+provider errors (429/5xx) are retried with exponential backoff, and a call that
+still fails is recorded as a failed case (with the error) instead of aborting the
+whole run. Override with `LLMQA_TEMPERATURE` / `LLMQA_SEED`.
+
+### Flexible expected answers
+
+Real golden sets rarely have one exact string answer. Each case can declare:
+
+```yaml
+- id: capital-usa
+  input: "What is the capital of the United States? One word."
+  expected: "Washington"
+  accept: ["Washington, D.C.", "D.C."]   # any alternative counts
+- id: pi
+  input: "What is pi to two decimal places?"
+  expected: "3.14"
+  tolerance: 0.001                       # numeric answers within a delta
+- id: apollo
+  input: "In what year did Apollo 11 land?"
+  expected: "1969"
+  expected_regex: "\\b1969\\b"            # match a pattern, not a fixed string
 ```
 
 ### Response cache (cost saver)
@@ -161,7 +202,7 @@ Because the `mock` provider is deterministic and needs no API key, CI is fast, f
 | Metric | What it measures |
 |--------|------------------|
 | `exact_match` | Normalized string match, with structural JSON comparison for JSON answers. |
-| `similarity` | Token overlap (Jaccard) similarity — swappable for embeddings later. |
+| `similarity` | Token overlap (Jaccard) by default; real embedding cosine similarity via `LLMQA_SIMILARITY=embeddings` (falls back to Jaccard if no key). |
 | `llm_judge` | LLM-as-judge with discrete grades + chain-of-thought; heuristic fallback on the mock provider. |
 | `hallucination` | Grounding check for cases with context; rewards correct refusals, N/A without context. |
 
@@ -213,7 +254,22 @@ and how to add a metric, provider, or dataset case. Please also read the
 
 ## Deploy
 
-Deploys as a single service (Railway-ready via `railway.json` + `nixpacks.toml`, honors `$PORT`). Set any of `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, or `XAI_API_KEY` in the environment to enable that live provider; without any key the dashboard still runs on the free, deterministic `mock` provider.
+Deploys as a single service — Railway-ready via `railway.json` + `nixpacks.toml`, or with the included **`Dockerfile`** (`docker build -t llmqa . && docker run -p 8000:8000 llmqa`). It honors `$PORT`. Set any of `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, or `XAI_API_KEY` to enable that live provider; without any key the dashboard still runs on the free, deterministic `mock` provider.
+
+### Hardening the public API
+
+The dashboard's run endpoints are guarded so a public deploy can't be abused or
+burn your API budget. All are env-configurable:
+
+| Env var | Default | Effect |
+|---------|---------|--------|
+| `LLMQA_ALLOW_REAL_PROVIDERS` | off | Real (paid) providers are **blocked** unless this is truthy — even if keys are set. Mocks always work. |
+| `LLMQA_API_TOKEN` | unset | When set, mutating endpoints require `Authorization: Bearer <token>` (or `X-API-Token`). |
+| `LLMQA_RATE_LIMIT` / `LLMQA_RATE_WINDOW_S` | 30 / 60 | Per-IP sliding-window rate limit on run endpoints (0 disables). |
+| `ALLOWED_ORIGINS` | none | CORS is closed by default (frontend is same-origin); set a comma list only for a split deploy. |
+
+Custom dataset paths sent to the API are restricted to the `datasets/` directory
+(no path traversal / arbitrary file reads).
 
 ## License
 
