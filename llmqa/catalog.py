@@ -38,6 +38,27 @@ def resolve_dataset_name(name: str | None, directory: str | Path = DATASETS_DIR)
     return str(candidate) if candidate.is_file() else default
 
 
+def resolve_cli_dataset(name_or_path: str, directory: str | Path = DATASETS_DIR) -> str:
+    """Resolve a CLI ``--dataset`` value to a path.
+
+    Unlike :func:`resolve_dataset_name` (which is for untrusted web input), the
+    CLI is trusted: an existing file path is used as-is, otherwise the value is
+    treated as a name in the packaged datasets directory. Raises if neither
+    resolves, so a typo fails loudly instead of silently evaluating the wrong
+    data.
+    """
+    p = Path(name_or_path)
+    if p.is_file():
+        return str(p)
+    candidate = Path(directory) / Path(name_or_path).name
+    if candidate.is_file():
+        return str(candidate)
+    raise FileNotFoundError(
+        f"Dataset {name_or_path!r} not found (looked for a file at that path and "
+        f"for that name in {directory}). Available: {', '.join(list_datasets(directory)) or 'none'}"
+    )
+
+
 def dataset_hash(path: str | Path) -> str:
     """Short, stable content hash of a dataset file (``sha256:<12 hex>``)."""
     digest = hashlib.sha256(Path(path).read_bytes()).hexdigest()

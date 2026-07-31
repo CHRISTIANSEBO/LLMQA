@@ -1,0 +1,70 @@
+name: "LLMQA quality gate"
+description: "Run an LLMQA evaluation and gate the build on pass rate / regression. Emits JUnit XML and GitHub annotations."
+branding:
+  icon: "check-circle"
+  color: "green"
+
+inputs:
+  provider:
+    description: "Provider to evaluate (mock, mock-strong, anthropic, openai, xai)."
+    required: false
+    default: "mock"
+  dataset:
+    description: "A dataset file path in your repo, or a name shipped in LLMQA (e.g. qa_golden.yaml)."
+    required: false
+    default: "qa_golden.yaml"
+  metrics:
+    description: "Space-separated metrics to run."
+    required: false
+    default: "exact_match similarity llm_judge hallucination"
+  min-pass-rate:
+    description: "Fail the job if the pass rate is below this (0-1). Empty to skip."
+    required: false
+    default: "0.8"
+  regression:
+    description: "Compare against the last stored run and fail on regression (true/false)."
+    required: false
+    default: "false"
+  concurrency:
+    description: "Cases to run in parallel."
+    required: false
+    default: "4"
+  junit-path:
+    description: "Where to write the JUnit XML report."
+    required: false
+    default: "llmqa-results.xml"
+  python-version:
+    description: "Python version to set up."
+    required: false
+    default: "3.11"
+
+outputs:
+  junit-path:
+    description: "Path to the JUnit XML report that was written."
+    value: ${{ inputs.junit-path }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install LLMQA
+      shell: bash
+      run: python -m pip install --upgrade pip && pip install "llmqa[web,providers] @ git+https://github.com/CHRISTIANSEBO/LLMQA@main" || pip install -e "${{ github.action_path }}[web,providers]"
+
+    - name: Run evaluation gate
+      shell: bash
+      run: |
+        llmqa run \
+          --provider "${{ inputs.provider }}" \
+          --dataset "${{ inputs.dataset }}" \
+          --metrics ${{ inputs.metrics }} \
+          --concurrency "${{ inputs.concurrency }}" \
+          --junit "${{ inputs.junit-path }}" \
+          --github-annotations \
+          --no-store \
+          ${{ inputs.min-pass-rate != '' && format('--min-pass-rate {0}', inputs.min-pass-rate) || '' }} \
+          ${{ inputs.regression == 'true' && '--regression' || '' }}

@@ -66,13 +66,13 @@ packages = ["llmqa"]
 include = [
     "cli.py",
     "server.py",
-    "datasets/qa_golden.yaml",
+    "datasets/*.yaml",
 ]
 
 [tool.hatch.build.targets.wheel.force-include]
 "cli.py" = "cli.py"
 "server.py" = "server.py"
-"datasets/qa_golden.yaml" = "datasets/qa_golden.yaml"
+"datasets" = "datasets"
 
 [tool.hatch.build.targets.sdist]
 include = [
