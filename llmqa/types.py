@@ -70,6 +70,10 @@ class EvalRun(BaseModel):
     results: list[CaseResult] = Field(default_factory=list)
     total_cost_usd: float = 0.0
     timestamp: str = ""
+    # Set when a run was halted before every case ran (e.g. a cost ceiling was
+    # hit). ``stopped_reason`` is a short human-readable explanation.
+    stopped_early: bool = False
+    stopped_reason: str = ""
 
     @property
     def pass_rate(self) -> float:

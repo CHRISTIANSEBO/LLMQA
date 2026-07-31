@@ -104,6 +104,19 @@ class RunRequest(BaseModel):
     case_ids: list[str] | None = None
     dataset: str | None = None
     store: bool = True
+    # Run cases in parallel (I/O-bound provider calls). Clamped server-side.
+    concurrency: int = 1
+    # Optional safety ceiling: stop the run once cost reaches this many USD.
+    max_cost_usd: float | None = None
+
+
+# Upper bound on request-supplied concurrency so a single call can't exhaust
+# the server's thread pool.
+MAX_CONCURRENCY = 16
+
+
+def _clamp_concurrency(value: int) -> int:
+    return max(1, min(int(value or 1), MAX_CONCURRENCY))
 
 
 @app.get("/api/health")
@@ -185,7 +198,12 @@ def run(req: RunRequest) -> dict:
             metrics.append(build_metric(name))
 
     dataset = req.dataset or DEFAULT_DATASET
-    eval_run = run_eval(dataset, provider, metrics, tags=req.tags, case_ids=req.case_ids)
+    eval_run = run_eval(
+        dataset, provider, metrics,
+        tags=req.tags, case_ids=req.case_ids,
+        concurrency=_clamp_concurrency(req.concurrency),
+        max_cost_usd=req.max_cost_usd,
+    )
 
     run_id = save_run(eval_run, DB_PATH) if req.store else None
 
@@ -194,6 +212,8 @@ def run(req: RunRequest) -> dict:
     payload["avg_score"] = eval_run.avg_score
     payload["score_by_metric"] = eval_run.score_by_metric()
     payload["run_id"] = run_id
+    payload["stopped_early"] = eval_run.stopped_early
+    payload["stopped_reason"] = eval_run.stopped_reason
     # `passed` is a computed property, so inject it per case for the frontend.
     for case_payload, case_result in zip(payload["results"], eval_run.results):
         case_payload["passed"] = case_result.passed
@@ -225,9 +245,14 @@ def run_stream(req: RunRequest):
     dataset_path = req.dataset or DEFAULT_DATASET
     store = req.store
 
+    conc = _clamp_concurrency(req.concurrency)
+
     def _event_gen():
         run = None
-        for run, cr in iter_eval(dataset_path, provider, metrics, req.tags, req.case_ids):
+        for run, cr in iter_eval(
+            dataset_path, provider, metrics, req.tags, req.case_ids,
+            concurrency=conc, max_cost_usd=req.max_cost_usd,
+        ):
             case_data = cr.model_dump()
             case_data["passed"] = cr.passed
             yield f"data: {_json.dumps({'type': 'case', 'result': case_data})}\n\n"
@@ -241,6 +266,8 @@ def run_stream(req: RunRequest):
             "model": provider.model,
             "provider": provider.name,
             "run_id": run_id,
+            "stopped_early": run.stopped_early if run else False,
+            "stopped_reason": run.stopped_reason if run else "",
         }
         yield f"data: {_json.dumps(summary)}\n\n"
 

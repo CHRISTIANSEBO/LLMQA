@@ -25,7 +25,12 @@ from llmqa.store import save_run, latest_run
 
 
 def cmd_run(args: argparse.Namespace) -> int:
-    provider = get_provider(args.provider, use_cache=not args.no_cache)
+    provider = get_provider(
+        args.provider,
+        use_cache=not args.no_cache,
+        max_retries=args.retries,
+        timeout_s=args.timeout,
+    )
 
     # LLM-based metrics use the same provider as judge unless it's mock.
     judge = provider
@@ -38,8 +43,14 @@ def cmd_run(args: argparse.Namespace) -> int:
 
     baseline = latest_run(args.db) if args.regression else None
 
-    run = run_eval(args.dataset, provider, metrics, tags=args.tags)
+    run = run_eval(
+        args.dataset, provider, metrics, tags=args.tags,
+        concurrency=args.concurrency, max_cost_usd=args.max_cost,
+    )
     print(to_console(run))
+
+    if run.stopped_early:
+        print(f"\n⚠ Run stopped early: {run.stopped_reason}")
 
     if args.markdown:
         Path(args.markdown).write_text(to_markdown(run))
@@ -83,6 +94,14 @@ def build_parser() -> argparse.ArgumentParser:
     r.add_argument("--metrics", nargs="+",
                    default=["exact_match", "similarity", "llm_judge", "hallucination"])
     r.add_argument("--tags", nargs="*", help="Only run cases with these tags")
+    r.add_argument("--concurrency", type=int, default=1,
+                   help="Run this many cases in parallel (I/O-bound provider calls)")
+    r.add_argument("--timeout", type=float, default=None,
+                   help="Per-call hard timeout in seconds for a provider request")
+    r.add_argument("--retries", type=int, default=2,
+                   help="Retries per provider call on failure (exponential backoff)")
+    r.add_argument("--max-cost", type=float, default=None,
+                   help="Stop the run once accumulated cost (USD) reaches this ceiling")
     r.add_argument("--min-pass-rate", type=float, help="Fail (exit 1) below this pass rate")
     r.add_argument("--regression", action="store_true", help="Compare to last stored run")
     r.add_argument("--regression-tolerance", type=float, default=0.05)
