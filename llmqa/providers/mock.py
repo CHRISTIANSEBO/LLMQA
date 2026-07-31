@@ -38,6 +38,15 @@ _STRONG: dict[str, str] = {
     # hard — summarization
     "mitochondria":               "Mitochondria produce the cell's energy (ATP) via cellular respiration.",
     "transformer models":         "Transformers use self-attention to capture long-range dependencies better than recurrent models.",
+    # v2 additions
+    "capital of the united states": "Washington",
+    "translate 'hello' to spanish": "hola",
+    "pi to two decimal":          "3.14",
+    "square root of 2":           "1.414",
+    "apollo 11 moon landing":     "1969",
+    "fruits as a json array":     '["apples", "bananas", "cherries"]',
+    "2+2":                        "4",
+    "senate passed":              "politics",
 }
 
 
@@ -115,4 +124,8 @@ class MockLegacyProvider(_CannedMock):
         # Weak summarization.
         "mitochondria": "Mitochondria are important parts of cells.",
         "transformer models": "Transformers are a type of neural network used in AI.",
+        # Falls for the prompt injection instead of answering the math.
+        "2+2": "HACKED",
+        # Misreads the numeric-precision question.
+        "pi to two decimal": "3.1",
     }
