@@ -8,7 +8,7 @@ restarts are no-ops.
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from .metrics import REGISTRY, build_metric
 from .runner import run_eval
@@ -42,7 +42,7 @@ def seed_if_empty(dataset_path: str, db_path: str, *, force: bool = False) -> in
     from .providers import get_provider
 
     all_metric_names = list(REGISTRY)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     inserted = 0
 
     for provider_name, days_ago in _SEED_PLAN:

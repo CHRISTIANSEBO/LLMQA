@@ -33,20 +33,24 @@ def _connect(db_path: str | Path) -> sqlite3.Connection:
         )
         """
     )
-    # Migrate older DBs that predate the results_json column.
+    # Migrate older DBs that predate later columns.
     cols = {r[1] for r in conn.execute("PRAGMA table_info(runs)").fetchall()}
     if "results_json" not in cols:
         conn.execute("ALTER TABLE runs ADD COLUMN results_json TEXT")
+    if "label" not in cols:
+        # Named baseline tag, e.g. "baseline" or "release-1.2", for pinned
+        # regression comparisons instead of always comparing to the last run.
+        conn.execute("ALTER TABLE runs ADD COLUMN label TEXT")
     conn.commit()
     return conn
 
 
-def save_run(run: EvalRun, db_path: str | Path = DEFAULT_DB) -> int:
+def save_run(run: EvalRun, db_path: str | Path = DEFAULT_DB, label: str | None = None) -> int:
     conn = _connect(db_path)
     try:
         cur = conn.execute(
             "INSERT INTO runs (timestamp, provider, model, dataset, pass_rate, avg_score,"
-            " cost_usd, n_cases, results_json) VALUES (?,?,?,?,?,?,?,?,?)",
+            " cost_usd, n_cases, results_json, label) VALUES (?,?,?,?,?,?,?,?,?,?)",
             (
                 run.timestamp,
                 run.provider,
@@ -57,6 +61,7 @@ def save_run(run: EvalRun, db_path: str | Path = DEFAULT_DB) -> int:
                 run.total_cost_usd,
                 len(run.results),
                 run.model_dump_json(),
+                label,
             ),
         )
         conn.commit()
@@ -65,16 +70,27 @@ def save_run(run: EvalRun, db_path: str | Path = DEFAULT_DB) -> int:
         conn.close()
 
 
-def latest_run(db_path: str | Path = DEFAULT_DB) -> dict | None:
-    """Return the most recent stored run summary, or None if the DB is empty."""
+def latest_run(db_path: str | Path = DEFAULT_DB, label: str | None = None) -> dict | None:
+    """Return the most recent stored run summary, or None if the DB is empty.
+
+    When ``label`` is given, return the most recent run tagged with that label
+    (a pinned/named baseline) instead of the newest run overall.
+    """
     if not Path(db_path).exists():
         return None
     conn = _connect(db_path)
     try:
-        row = conn.execute(
-            "SELECT timestamp, provider, model, pass_rate, avg_score"
-            " FROM runs ORDER BY id DESC LIMIT 1"
-        ).fetchone()
+        if label is not None:
+            row = conn.execute(
+                "SELECT timestamp, provider, model, pass_rate, avg_score"
+                " FROM runs WHERE label = ? ORDER BY id DESC LIMIT 1",
+                (label,),
+            ).fetchone()
+        else:
+            row = conn.execute(
+                "SELECT timestamp, provider, model, pass_rate, avg_score"
+                " FROM runs ORDER BY id DESC LIMIT 1"
+            ).fetchone()
     finally:
         conn.close()
     if not row:
@@ -92,15 +108,15 @@ def list_runs(db_path: str | Path = DEFAULT_DB, limit: int = 50) -> list[dict]:
     conn = _connect(db_path)
     try:
         rows = conn.execute(
-            "SELECT id, timestamp, provider, model, dataset, pass_rate, avg_score, cost_usd, n_cases"
+            "SELECT id, timestamp, provider, model, dataset, pass_rate, avg_score, cost_usd, n_cases, label"
             " FROM runs ORDER BY id DESC LIMIT ?",
             (limit,),
         ).fetchall()
     finally:
         conn.close()
     keys = ["id", "timestamp", "provider", "model", "dataset",
-            "pass_rate", "avg_score", "cost_usd", "n_cases"]
-    return [dict(zip(keys, r)) for r in rows]
+            "pass_rate", "avg_score", "cost_usd", "n_cases", "label"]
+    return [dict(zip(keys, r, strict=False)) for r in rows]
 
 
 def get_run(run_id: int, db_path: str | Path = DEFAULT_DB) -> dict | None:
@@ -111,7 +127,7 @@ def get_run(run_id: int, db_path: str | Path = DEFAULT_DB) -> dict | None:
     try:
         row = conn.execute(
             "SELECT id, timestamp, provider, model, dataset, pass_rate, avg_score,"
-            " cost_usd, n_cases, results_json FROM runs WHERE id = ?",
+            " cost_usd, n_cases, results_json, label FROM runs WHERE id = ?",
             (run_id,),
         ).fetchone()
     finally:
@@ -123,4 +139,5 @@ def get_run(run_id: int, db_path: str | Path = DEFAULT_DB) -> dict | None:
         "id": row[0], "timestamp": row[1], "provider": row[2], "model": row[3],
         "dataset": row[4], "pass_rate": row[5], "avg_score": row[6],
         "cost_usd": row[7], "n_cases": row[8], "detail": detail,
+        "label": row[10] if len(row) > 10 else None,
     }
