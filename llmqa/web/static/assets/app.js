@@ -8,13 +8,27 @@ const api = (path, opts) => fetch(path, opts).then(async (r) => {
 
 let METRIC_ORDER = [];
 let CASE_MAP = {}; // case_id → {input, expected, context, tags, gate_metrics}
+let CURRENT_DATASET = null; // selected dataset file name
 let LAST_RUN = null; // {summary, results} of the most recent single-provider run
 let RUN_SUMMARY = {}; // run_id → history summary row (for the diff slots)
 
 async function init() {
   const cfg = await api("/api/config");
   METRIC_ORDER = cfg.metrics;
-  (cfg.cases || []).forEach(c => { CASE_MAP[c.id] = c; });
+  CURRENT_DATASET = cfg.default_dataset || cfg.dataset;
+  applyCases(cfg.cases);
+
+  const dsSel = $("#dataset");
+  if (dsSel) {
+    (cfg.datasets || [cfg.dataset]).forEach((name) => {
+      const opt = document.createElement("option");
+      opt.value = name;
+      opt.textContent = name.replace(/\.ya?ml$/i, "");
+      dsSel.appendChild(opt);
+    });
+    dsSel.value = CURRENT_DATASET;
+    dsSel.addEventListener("change", onDatasetChange);
+  }
 
   const provSel = $("#provider");
   cfg.all_providers.forEach((p) => {
@@ -59,6 +73,31 @@ function selectedMetrics() {
   return [...document.querySelectorAll('#metrics input:checked')].map((i) => i.value);
 }
 
+// Rebuild the case lookup (used by row detail, dataset peek, and the progress
+// denominator) from a /api/config cases array.
+function applyCases(cases) {
+  CASE_MAP = {};
+  (cases || []).forEach((c) => { CASE_MAP[c.id] = c; });
+}
+
+// Switching datasets refetches that dataset's cases and resets the results.
+async function onDatasetChange(e) {
+  CURRENT_DATASET = e.target.value;
+  try {
+    const cfg = await api(`/api/config?dataset=${encodeURIComponent(CURRENT_DATASET)}`);
+    applyCases(cfg.cases);
+    initDatasetPeek();
+    $("#results tbody").innerHTML = "";
+    const verdictEl = $("#verdict"); if (verdictEl) verdictEl.hidden = true;
+    setDownloadsEnabled(false);
+    LAST_RUN = null;
+    showEmptyState();
+    $("#status").textContent = `Dataset: ${CURRENT_DATASET.replace(/\.ya?ml$/i, "")}`;
+  } catch (err) {
+    $("#status").textContent = "\u26a0 " + err.message;
+  }
+}
+
 async function runEval() {
   const btn = $("#runBtn");
   const status = $("#status");
@@ -82,6 +121,7 @@ async function runEval() {
     provider: $("#provider").value,
     metrics: selectedMetrics(),
     tags: tagList,
+    dataset: CURRENT_DATASET,
     store: $("#store").checked,
   };
 
@@ -439,7 +479,7 @@ async function runCompare() {
     const data = await api("/api/compare", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ providers: [provA, provB] }),
+      body: JSON.stringify({ providers: [provA, provB], dataset: CURRENT_DATASET }),
     });
     renderComparison(data);
     status.textContent = "";
@@ -629,6 +669,7 @@ async function rerunCase(caseId, row, detailRow) {
         provider: $("#provider").value,
         metrics: selectedMetrics(),
         case_ids: [caseId],
+        dataset: CURRENT_DATASET,
         store: false,
       }),
     });
