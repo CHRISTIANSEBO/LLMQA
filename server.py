@@ -16,10 +16,16 @@ load_dotenv()  # load .env if present
 
 import uvicorn
 
+
+def _truthy(val: str | None) -> bool:
+    # "0"/"false"/"" are falsey; only explicit truthy strings enable reload.
+    return (val or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
 if __name__ == "__main__":
     uvicorn.run(
         "llmqa.web.app:app",
         host=os.environ.get("HOST", "0.0.0.0"),
         port=int(os.environ.get("PORT", "8080")),
-        reload=bool(os.environ.get("LLMQA_RELOAD")),
+        reload=_truthy(os.environ.get("LLMQA_RELOAD")),
     )

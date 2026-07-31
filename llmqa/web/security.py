@@ -9,7 +9,9 @@ module centralizes three cheap, dependency-free protections:
 2. A gate that blocks real (paid) providers unless explicitly enabled
    (``LLMQA_ALLOW_REAL_PROVIDERS``).
 3. An in-memory per-IP rate limiter on mutating endpoints.
-4. A dataset-path allowlist to prevent path traversal / arbitrary file reads.
+
+(Untrusted dataset names are resolved safely by ``catalog.resolve_dataset_name``,
+which only honors bare file names inside the packaged ``datasets/`` directory.)
 
 All limits are env-configurable and default to safe values.
 """
@@ -19,7 +21,6 @@ import os
 import threading
 import time
 from collections import defaultdict, deque
-from pathlib import Path
 
 from fastapi import HTTPException, Request
 
@@ -103,14 +104,19 @@ class RateLimiter:
 
 
 _LIMITER: RateLimiter | None = None
+_LIMITER_LOCK = threading.Lock()
 
 
 def _limiter() -> RateLimiter:
     global _LIMITER
+    # Double-checked locking so concurrent first requests can't each build a
+    # separate limiter (which would silently split the rate budget).
     if _LIMITER is None:
-        limit = int(os.environ.get("LLMQA_RATE_LIMIT", "30"))
-        window = float(os.environ.get("LLMQA_RATE_WINDOW_S", "60"))
-        _LIMITER = RateLimiter(limit, window)
+        with _LIMITER_LOCK:
+            if _LIMITER is None:
+                limit = int(os.environ.get("LLMQA_RATE_LIMIT", "30"))
+                window = float(os.environ.get("LLMQA_RATE_WINDOW_S", "60"))
+                _LIMITER = RateLimiter(limit, window)
     return _LIMITER
 
 
@@ -132,37 +138,3 @@ def guard_mutation(request: Request, provider: str | None = None) -> None:
     rate_limit(request)
     if provider is not None:
         check_provider_allowed(provider)
-
-
-# --- Dataset path allowlist -------------------------------------------------
-def resolve_dataset(path: str | None, default_dataset: str, datasets_dir: Path) -> str:
-    """Resolve a requested dataset path, rejecting anything outside the allowlist.
-
-    Allowed: the default dataset, or any ``.yaml``/``.yml`` file that resolves
-    to a location inside ``datasets_dir``. This blocks path traversal and
-    arbitrary local-file reads (e.g. ``dataset=/etc/passwd``).
-    """
-    if not path:
-        return default_dataset
-
-    candidate = Path(path)
-    if not candidate.is_absolute():
-        candidate = datasets_dir / candidate
-    try:
-        resolved = candidate.resolve()
-        base = datasets_dir.resolve()
-    except OSError:
-        raise HTTPException(status_code=400, detail="Invalid dataset path.") from None
-
-    if resolved == Path(default_dataset).resolve():
-        return str(resolved)
-    if base not in resolved.parents and resolved != base:
-        raise HTTPException(
-            status_code=400,
-            detail="Dataset must be inside the datasets/ directory.",
-        )
-    if resolved.suffix.lower() not in {".yaml", ".yml"}:
-        raise HTTPException(status_code=400, detail="Dataset must be a .yaml file.")
-    if not resolved.is_file():
-        raise HTTPException(status_code=404, detail="Dataset file not found.")
-    return str(resolved)
