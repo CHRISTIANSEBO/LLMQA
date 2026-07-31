@@ -1,0 +1,107 @@
+- id: summarize-climate-report
+  input: |
+    Summarize the following passage in 1-2 sentences:
+
+    A recent IPCC report warns that global temperatures are likely to rise by 1.5 degrees Celsius above pre-industrial levels within the next two decades if greenhouse gas emissions continue at current rates. The report emphasizes the urgent need for rapid and deep reductions in emissions across all sectors, including energy, transportation, and agriculture. It also highlights that many climate impacts, such as extreme weather events and sea-level rise, are already irreversible.
+  expected: The IPCC report projects a 1.5°C temperature rise within 20 years without major emission cuts and stresses the need for immediate, deep reductions across key sectors while noting some climate impacts are now irreversible.
+  tags: ["climate", "environment", "report"]
+  gate_metrics: ["llm_judge"]
+
+- id: summarize-ai-advances
+  input: |
+    Summarize the following passage in 1-2 sentences:
+
+    Researchers at a leading AI lab have developed a new large language model that demonstrates improved reasoning capabilities on complex multi-step problems. The model was trained on a diverse dataset including scientific papers and code repositories. Early benchmarks show it outperforming previous state-of-the-art systems on tasks requiring logical deduction and mathematical problem solving.
+  expected: A new LLM from a top lab shows stronger reasoning on multi-step problems after training on scientific and code data, beating prior models on logic and math benchmarks.
+  tags: ["technology", "ai", "research"]
+  gate_metrics: ["llm_judge", "similarity"]
+
+- id: summarize-history-ww2
+  input: |
+    Summarize the following passage in 1-2 sentences:
+
+    World War II began in 1939 when Germany invaded Poland, prompting Britain and France to declare war. The conflict expanded globally and involved major powers including the United States after Pearl Harbor in 1941. It ended in 1945 with the Allied victory in Europe and the atomic bombings of Hiroshima and Nagasaki leading to Japan's surrender.
+  expected: WWII started in 1939 with Germany's invasion of Poland and ended in 1945 after Allied victories in Europe and the US atomic bombings that prompted Japan's surrender.
+  tags: ["history", "world-war-ii"]
+  gate_metrics: ["llm_judge"]
+
+- id: summarize-quantum-computing
+  input: |
+    Summarize the following passage in 1-2 sentences:
+
+    Quantum computing leverages the principles of quantum mechanics, such as superposition and entanglement, to perform certain calculations exponentially faster than classical computers. Companies like IBM and Google have built prototype quantum processors with increasing numbers of qubits. However, practical, error-corrected quantum computers capable of solving commercially relevant problems are still years away.
+  expected: Quantum computers use superposition and entanglement for faster calculations on some problems; while prototypes exist from IBM and Google, fully practical systems remain years from realization.
+  tags: ["science", "quantum", "computing"]
+  gate_metrics: ["llm_judge"]
+
+- id: summarize-stock-market
+  input: |
+    Summarize the following passage in 1-2 sentences:
+
+    Global stock markets experienced significant volatility last quarter due to rising interest rates and geopolitical tensions. Technology stocks were particularly affected, with many major indices posting their worst quarterly performance in over a year. Analysts recommend a cautious approach, focusing on defensive sectors such as healthcare and consumer staples.
+  expected: Stock markets saw high volatility from rate hikes and geopolitics, hitting tech stocks hardest and leading analysts to favor defensive sectors like healthcare.
+  tags: ["finance", "markets", "analysis"]
+  gate_metrics: ["llm_judge"]
+
+- id: summarize-renewable-energy
+  input: |
+    Summarize the following passage in 1-2 sentences:
+
+    Solar and wind power capacity has grown rapidly worldwide, driven by falling technology costs and supportive government policies. In 2023, renewables accounted for over 30% of global electricity generation for the first time. Experts project that renewables could supply more than half of the world's electricity by 2030 if current growth trends continue.
+  expected: Renewables like solar and wind now generate over 30% of global electricity thanks to lower costs and policy support, with projections exceeding 50% by 2030.
+  tags: ["energy", "renewables", "environment"]
+  gate_metrics: ["llm_judge"]
+
+- id: summarize-space-exploration
+  input: |
+    Summarize the following passage in 1-2 sentences:
+
+    NASA's Perseverance rover has been exploring the Jezero crater on Mars, searching for signs of ancient microbial life. The rover has collected several rock samples that will be returned to Earth by future missions. Scientists believe the crater once held a lake, making it a promising location for astrobiology research.
+  expected: NASA's Perseverance rover is sampling rocks in Mars' Jezero crater, once a lake, to find ancient life signs; samples will return to Earth for further study.
+  tags: ["space", "mars", "nasa"]
+  gate_metrics: ["llm_judge"]
+
+- id: summarize-cybersecurity
+  input: |
+    Summarize the following passage in 1-2 sentences:
+
+    A major ransomware attack recently targeted hospitals and critical infrastructure across multiple countries. The attackers exploited unpatched vulnerabilities in widely used network software. Security experts urge organizations to implement regular patching, employee training, and robust backup strategies to mitigate future risks.
+  expected: A widespread ransomware attack hit hospitals and infrastructure by exploiting software vulnerabilities; experts advise patching, training, and backups as key defenses.
+  tags: ["security", "cyber", "ransomware"]
+  gate_metrics: ["llm_judge"]
+
+- id: summarize-biodiversity
+  input: |
+    Summarize the following passage in 1-2 sentences:
+
+    Scientists estimate that up to one million species face extinction due to human activities including habitat destruction, pollution, and climate change. The loss of biodiversity threatens ecosystem services such as pollination, water purification, and carbon sequestration. Conservation efforts must prioritize protecting critical habitats and reducing human environmental footprint.
+  expected: Up to a million species risk extinction from human impacts, endangering vital ecosystem services; urgent conservation of habitats and footprint reduction are needed.
+  tags: ["environment", "biodiversity", "conservation"]
+  gate_metrics: ["llm_judge"]
+
+- id: summarize-blockchain
+  input: |
+    Summarize the following passage in 1-2 sentences:
+
+    Blockchain technology provides a decentralized and immutable ledger that underpins cryptocurrencies like Bitcoin. Beyond finance, potential applications include supply chain tracking, digital identity verification, and smart contracts that execute automatically when conditions are met. Scalability and energy consumption remain significant challenges for widespread adoption.
+  expected: Blockchain offers decentralized immutable ledgers for crypto and applications like supply chains and smart contracts, though scalability and energy use are ongoing hurdles.
+  tags: ["technology", "blockchain", "crypto"]
+  gate_metrics: ["llm_judge", "similarity"]
+
+- id: summarize-healthcare-ai
+  input: |
+    Summarize the following passage in 1-2 sentences:
+
+    Artificial intelligence is increasingly used in healthcare for diagnostic imaging, drug discovery, and personalized treatment planning. AI systems can analyze medical images with accuracy rivaling or exceeding human radiologists in specific tasks. Regulatory approval and integration with existing clinical workflows remain key hurdles to broader deployment.
+  expected: AI aids healthcare in diagnostics, drug discovery, and personalized care with high accuracy on imaging tasks, but regulatory and workflow integration challenges persist.
+  tags: ["healthcare", "ai", "medicine"]
+  gate_metrics: ["llm_judge"]
+
+- id: summarize-ocean-pollution
+  input: |
+    Summarize the following passage in 1-2 sentences:
+
+    Plastic pollution in the oceans has reached alarming levels, with an estimated 8 million metric tons entering marine environments annually. Microplastics have been found in the deepest ocean trenches and in the bodies of marine animals. International agreements and improved waste management are essential to address this growing environmental crisis.
+  expected: 8 million tons of plastic enter oceans yearly, with microplastics pervasive even in deep seas and marine life; global agreements and better waste systems are critical.
+  tags: ["environment", "oceans", "pollution"]
+  gate_metrics: ["llm_judge"]

@@ -1,0 +1,83 @@
+- id: python-list-comprehension
+  input: Write a Python list comprehension that squares all even numbers from 0 to 20 inclusive.
+  expected: "[x**2 for x in range(21) if x % 2 == 0]"
+  tags: ["python", "list-comprehension", "basics"]
+  gate_metrics: ["llm_judge", "similarity"]
+
+- id: git-rebase-vs-merge
+  input: What is the primary difference between git rebase and git merge?
+  expected: Rebase rewrites commit history to create a linear sequence; merge preserves the full branch history with a merge commit.
+  tags: ["git", "version-control", "workflow"]
+  gate_metrics: ["llm_judge"]
+
+- id: http-status-404
+  input: What does HTTP status code 404 indicate?
+  expected: The requested resource was not found on the server.
+  tags: ["http", "web", "status-codes"]
+  gate_metrics: ["exact_match", "similarity"]
+
+- id: sql-join-types
+  input: Name the four main types of SQL JOINs and briefly describe each.
+  expected: INNER JOIN (matching rows only), LEFT JOIN (all left + matching right), RIGHT JOIN (all right + matching left), FULL OUTER JOIN (all rows from both).
+  tags: ["sql", "database", "joins"]
+  gate_metrics: ["llm_judge", "similarity"]
+
+- id: regex-email
+  input: Provide a simple regex pattern to match a basic email address (username@domain.tld).
+  expected: "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}"
+  tags: ["regex", "validation", "pattern"]
+  gate_metrics: ["llm_judge", "similarity"]
+
+- id: python-decorator
+  input: What is a Python decorator and give a simple example of its use?
+  expected: "A decorator is a function that wraps another function to extend its behavior. Example: @timer\ndef slow_func(): ..."
+  tags: ["python", "decorators", "advanced"]
+  gate_metrics: ["llm_judge"]
+
+- id: http-methods-idempotent
+  input: Which HTTP methods are considered idempotent?
+  expected: GET, PUT, DELETE, HEAD, OPTIONS, TRACE (they produce the same result when called multiple times).
+  tags: ["http", "rest", "methods"]
+  gate_metrics: ["llm_judge"]
+
+- id: sql-group-by
+  input: Write a SQL query to count the number of orders per customer from an orders table with columns customer_id and order_id.
+  expected: "SELECT customer_id, COUNT(order_id) FROM orders GROUP BY customer_id;"
+  tags: ["sql", "aggregation", "query"]
+  gate_metrics: ["llm_judge", "similarity"]
+
+- id: regex-phone-us
+  input: Write a regex to match a US phone number in the format (123) 456-7890.
+  expected: "\\(\\d{3}\\) \\d{3}-\\d{4}"
+  tags: ["regex", "phone", "format"]
+  gate_metrics: ["llm_judge", "similarity"]
+
+- id: git-stash
+  input: What does `git stash` do and when would you use it?
+  expected: Temporarily saves uncommitted changes to allow switching branches or pulling updates; useful for quick context switches without committing incomplete work.
+  tags: ["git", "workflow", "intermediate"]
+  gate_metrics: ["llm_judge"]
+
+- id: python-context-manager
+  input: Explain the purpose of Python's `with` statement and name two built-in context managers.
+  expected: "The `with` statement ensures resources are properly acquired and released (e.g. files closed). Built-ins: open() for files, threading.Lock()."
+  tags: ["python", "context-managers", "resource"]
+  gate_metrics: ["llm_judge"]
+
+- id: http-cors
+  input: What is the purpose of the Access-Control-Allow-Origin header in HTTP?
+  expected: It specifies which origins are permitted to access the resource, enabling Cross-Origin Resource Sharing (CORS).
+  tags: ["http", "security", "cors"]
+  gate_metrics: ["llm_judge"]
+
+- id: sql-subquery
+  input: Write a SQL query that finds employees earning more than the average salary using a subquery.
+  expected: "SELECT * FROM employees WHERE salary > (SELECT AVG(salary) FROM employees);"
+  tags: ["sql", "subqueries", "advanced"]
+  gate_metrics: ["llm_judge", "similarity"]
+
+- id: regex-url
+  input: Provide a regex pattern that matches simple http/https URLs.
+  expected: "https?://[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}(/\\S*)?"
+  tags: ["regex", "url", "web"]
+  gate_metrics: ["llm_judge", "similarity"]

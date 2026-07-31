@@ -1,0 +1,162 @@
+- id: rag-company-revenue-2023
+  input: What was Acme Corp's total revenue in 2023?
+  expected: $42.5 million
+  context: |
+    Acme Corp financial summary for fiscal year 2023:
+    - Total revenue: $42.5 million
+    - Operating expenses: $31.2 million
+    - Net profit: $8.7 million
+    The company operates primarily in the North American market with expansion plans into Europe in 2025.
+  tags: ["rag", "finance", "company"]
+  gate_metrics: ["hallucination", "llm_judge"]
+
+- id: rag-product-features
+  input: Does the new XPhone support wireless charging?
+  expected: Yes, it supports wireless charging at up to 15W.
+  context: |
+    Product specifications for the XPhone Pro (released March 2025):
+    - Display: 6.7-inch OLED, 120Hz refresh rate
+    - Battery: 4500mAh with 15W wireless charging support
+    - Camera: 48MP main sensor, 12MP ultrawide
+    - Processor: Snapdragon 8 Gen 4
+    - Storage options: 128GB, 256GB, 512GB
+  tags: ["rag", "product", "tech"]
+  gate_metrics: ["hallucination", "llm_judge"]
+
+- id: rag-policy-vacation
+  input: How many paid vacation days do new employees receive at TechNova?
+  expected: New employees receive 15 paid vacation days per year, increasing to 20 after three years.
+  context: |
+    TechNova employee handbook excerpt (updated January 2025):
+    - New hires accrue 15 paid vacation days annually.
+    - After three years of service, vacation increases to 20 days.
+    - Sick leave: 10 days per year, no accrual limit.
+    - Remote work policy: hybrid model with minimum two office days per week.
+  tags: ["rag", "hr", "policy"]
+  gate_metrics: ["hallucination", "llm_judge"]
+
+- id: rag-science-fact-mars
+  input: What is the average surface temperature on Mars according to the provided data?
+  expected: Approximately -60 degrees Celsius.
+  context: |
+    Mars climate facts from NASA reference document:
+    - Average surface temperature: -60°C (-80°F)
+    - Atmospheric composition: 95% carbon dioxide
+    - Day length: 24 hours 37 minutes
+    - Orbital period: 687 Earth days
+    - Notable features: Olympus Mons, Valles Marineris
+  tags: ["rag", "science", "astronomy"]
+  gate_metrics: ["hallucination", "llm_judge"]
+
+- id: rag-unknown-fact-1
+  input: What was the quarterly profit margin for Acme Corp in Q4 2024?
+  expected: The context does not contain information about Q4 2024 profit margins.
+  context: |
+    Acme Corp financial summary for fiscal year 2023:
+    - Total revenue: $42.5 million
+    - Operating expenses: $31.2 million
+    - Net profit: $8.7 million
+    The company operates primarily in the North American market with expansion plans into Europe in 2025.
+  tags: ["rag", "unknown", "hallucination-test"]
+  gate_metrics: ["hallucination", "llm_judge"]
+
+- id: rag-unknown-fact-2
+  input: Does the XPhone Pro come in a 1TB storage variant?
+  expected: The provided context does not mention a 1TB storage option for the XPhone Pro.
+  context: |
+    Product specifications for the XPhone Pro (released March 2025):
+    - Display: 6.7-inch OLED, 120Hz refresh rate
+    - Battery: 4500mAh with 15W wireless charging support
+    - Camera: 48MP main sensor, 12MP ultrawide
+    - Processor: Snapdragon 8 Gen 4
+    - Storage options: 128GB, 256GB, 512GB
+  tags: ["rag", "unknown", "hallucination-test"]
+  gate_metrics: ["hallucination", "llm_judge"]
+
+- id: rag-policy-remote
+  input: What is TechNova's policy on fully remote work?
+  expected: The context indicates a hybrid model requiring a minimum of two office days per week; fully remote work is not mentioned.
+  context: |
+    TechNova employee handbook excerpt (updated January 2025):
+    - New hires accrue 15 paid vacation days annually.
+    - After three years of service, vacation increases to 20 days.
+    - Sick leave: 10 days per year, no accrual limit.
+    - Remote work policy: hybrid model with minimum two office days per week.
+  tags: ["rag", "hr", "policy"]
+  gate_metrics: ["hallucination", "llm_judge"]
+
+- id: rag-science-fact-jupiter
+  input: How many moons does Jupiter have according to the document?
+  expected: The context does not provide the number of moons for Jupiter.
+  context: |
+    Mars climate facts from NASA reference document:
+    - Average surface temperature: -60°C (-80°F)
+    - Atmospheric composition: 95% carbon dioxide
+    - Day length: 24 hours 37 minutes
+    - Orbital period: 687 Earth days
+    - Notable features: Olympus Mons, Valles Marineris
+  tags: ["rag", "unknown", "hallucination-test"]
+  gate_metrics: ["hallucination", "llm_judge"]
+
+- id: rag-product-battery
+  input: What is the battery capacity of the XPhone Pro?
+  expected: 4500mAh
+  context: |
+    Product specifications for the XPhone Pro (released March 2025):
+    - Display: 6.7-inch OLED, 120Hz refresh rate
+    - Battery: 4500mAh with 15W wireless charging support
+    - Camera: 48MP main sensor, 12MP ultrawide
+    - Processor: Snapdragon 8 Gen 4
+    - Storage options: 128GB, 256GB, 512GB
+  tags: ["rag", "product", "tech"]
+  gate_metrics: ["hallucination", "llm_judge"]
+
+- id: rag-unknown-fact-3
+  input: When was TechNova founded?
+  expected: The provided context does not contain information about TechNova's founding date.
+  context: |
+    TechNova employee handbook excerpt (updated January 2025):
+    - New hires accrue 15 paid vacation days annually.
+    - After three years of service, vacation increases to 20 days.
+    - Sick leave: 10 days per year, no accrual limit.
+    - Remote work policy: hybrid model with minimum two office days per week.
+  tags: ["rag", "unknown", "hallucination-test"]
+  gate_metrics: ["hallucination", "llm_judge"]
+
+- id: rag-company-expansion
+  input: What are Acme Corp's expansion plans?
+  expected: The company plans to expand into Europe in 2025.
+  context: |
+    Acme Corp financial summary for fiscal year 2023:
+    - Total revenue: $42.5 million
+    - Operating expenses: $31.2 million
+    - Net profit: $8.7 million
+    The company operates primarily in the North American market with expansion plans into Europe in 2025.
+  tags: ["rag", "finance", "strategy"]
+  gate_metrics: ["hallucination", "llm_judge"]
+
+- id: rag-science-fact-orbit
+  input: What is the length of a day on Mars?
+  expected: 24 hours 37 minutes
+  context: |
+    Mars climate facts from NASA reference document:
+    - Average surface temperature: -60°C (-80°F)
+    - Atmospheric composition: 95% carbon dioxide
+    - Day length: 24 hours 37 minutes
+    - Orbital period: 687 Earth days
+    - Notable features: Olympus Mons, Valles Marineris
+  tags: ["rag", "science", "astronomy"]
+  gate_metrics: ["hallucination", "llm_judge"]
+
+- id: rag-unknown-fact-4
+  input: What is the processor in the XPhone Pro?
+  expected: Snapdragon 8 Gen 4
+  context: |
+    Product specifications for the XPhone Pro (released March 2025):
+    - Display: 6.7-inch OLED, 120Hz refresh rate
+    - Battery: 4500mAh with 15W wireless charging support
+    - Camera: 48MP main sensor, 12MP ultrawide
+    - Processor: Snapdragon 8 Gen 4
+    - Storage options: 128GB, 256GB, 512GB
+  tags: ["rag", "product", "tech"]
+  gate_metrics: ["hallucination", "llm_judge"]
