@@ -1,11 +1,12 @@
 """Provider interface: anything that can turn a prompt into text + cost/latency."""
 from __future__ import annotations
 
-import threading
 import time
 from abc import ABC, abstractmethod
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
 from dataclasses import dataclass
+
+from ..cache import CacheBackend, build_cache, cache_key
 
 
 class ProviderError(RuntimeError):
@@ -32,31 +33,32 @@ class Provider(ABC):
         self,
         *,
         use_cache: bool = True,
+        cache_path: str | None = None,
         max_retries: int = 2,
         backoff_base: float = 0.5,
         timeout_s: float | None = None,
     ) -> None:
-        # In-memory response cache: de-duplicates identical calls within this
-        # process so repeated runs (dashboard clicks, regression compares, a
-        # judge re-asking the same prompt) don't re-spend tokens on a paid API.
-        # It is intentionally NOT persisted to disk — no risk of serving stale
-        # answers across process restarts, and no cache file to manage.
+        # Response cache: de-duplicates identical calls so repeated runs
+        # (dashboard clicks, regression compares, a judge re-asking the same
+        # prompt) don't re-spend tokens on a paid API. Backed by an in-process
+        # dict by default, or a SQLite file when ``cache_path`` is given so the
+        # cache survives restarts and is shared across worker processes. Both
+        # backends are thread-safe for the concurrent runner.
         self._use_cache = use_cache
-        self._cache: dict[tuple[str, str, str, str | None], tuple[str, float]] = {}
-        # The cache is read/written from worker threads when the runner uses
-        # concurrency, so guard it with a lock.
-        self._cache_lock = threading.Lock()
+        self._cache_backend: CacheBackend | None = (
+            build_cache(cache_path) if use_cache else None
+        )
         # Resilience knobs (matter for real paid providers; mocks never fail).
         self.max_retries = max_retries
         self.backoff_base = backoff_base
         self.timeout_s = timeout_s
 
-    def _cache_key(self, prompt: str, context: str | None) -> tuple[str, str, str, str | None]:
-        return (self.name, self.model, prompt, context)
+    def _cache_key(self, prompt: str, context: str | None) -> str:
+        return cache_key(self.name, self.model, prompt, context)
 
     def clear_cache(self) -> None:
-        with self._cache_lock:
-            self._cache.clear()
+        if self._cache_backend is not None:
+            self._cache_backend.clear()
 
     @abstractmethod
     def _complete(self, prompt: str, context: str | None = None) -> tuple[str, float]:
@@ -89,9 +91,8 @@ class Provider(ABC):
         times; after that a :class:`ProviderError` is raised.
         """
         key = self._cache_key(prompt, context)
-        if self._use_cache:
-            with self._cache_lock:
-                hit = self._cache.get(key)
+        if self._cache_backend is not None:
+            hit = self._cache_backend.get(key)
             if hit is not None:
                 text, _original_cost = hit
                 return ModelResponse(text=text, cost_usd=0.0, latency_ms=0.0, cached=True)
@@ -108,9 +109,8 @@ class Provider(ABC):
                 time.sleep(self.backoff_base * (2 ** attempt))
                 continue
             latency_ms = (time.perf_counter() - start) * 1000
-            if self._use_cache:
-                with self._cache_lock:
-                    self._cache[key] = (text, cost)
+            if self._cache_backend is not None:
+                self._cache_backend.set(key, text, cost)
             return ModelResponse(text=text, cost_usd=cost, latency_ms=latency_ms)
 
         raise ProviderError(

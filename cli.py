@@ -28,6 +28,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     provider = get_provider(
         args.provider,
         use_cache=not args.no_cache,
+        cache_path=args.cache_path,
         max_retries=args.retries,
         timeout_s=args.timeout,
     )
@@ -108,7 +109,10 @@ def build_parser() -> argparse.ArgumentParser:
     r.add_argument("--db", default="llmqa_runs.db")
     r.add_argument("--no-store", action="store_true", help="Do not persist this run")
     r.add_argument("--no-cache", action="store_true",
-                   help="Disable the in-memory response cache (forces a fresh call per case)")
+                   help="Disable the response cache (forces a fresh call per case)")
+    r.add_argument("--cache-path", default=None,
+                   help="Persist the response cache to this SQLite file "
+                        "(survives restarts and is shared across runs)")
     r.add_argument("--markdown", help="Write a Markdown report to this path")
     r.set_defaults(func=cmd_run)
     return p

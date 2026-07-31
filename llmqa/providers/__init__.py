@@ -22,14 +22,17 @@ def get_provider(
     name: str,
     *,
     use_cache: bool = True,
+    cache_path: str | None = None,
     max_retries: int | None = None,
     backoff_base: float | None = None,
     timeout_s: float | None = None,
 ) -> Provider:
     """Return a provider instance by name.
 
-    ``use_cache`` enables the in-memory response cache so repeated identical
-    calls within the process don't re-spend tokens on a paid provider.
+    ``use_cache`` enables the response cache so repeated identical calls don't
+    re-spend tokens on a paid provider. ``cache_path`` makes that cache
+    persistent (SQLite) so it survives restarts and is shared across workers;
+    when omitted the cache is per-process/in-memory.
 
     ``max_retries``/``backoff_base``/``timeout_s`` override the provider's
     resilience defaults when given. They are applied post-construction so
@@ -53,6 +56,12 @@ def get_provider(
             f"(try {', '.join(repr(k) for k in MOCK_PROVIDERS)}, "
             f"'anthropic', 'openai', 'xai'/'grok')"
         )
+
+    # Upgrade to a persistent cache when requested (applied post-construction so
+    # provider subclasses don't each need to accept cache_path).
+    if use_cache and cache_path:
+        from ..cache import build_cache
+        inst._cache_backend = build_cache(cache_path)
 
     if max_retries is not None:
         inst.max_retries = max_retries

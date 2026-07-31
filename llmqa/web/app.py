@@ -82,7 +82,10 @@ def _get_cached_provider(name: str):
     """
     provider = _PROVIDER_CACHE.get(name)
     if provider is None:
-        provider = get_provider(name, use_cache=True)
+        # Opt into a persistent, cross-restart response cache by setting
+        # LLMQA_CACHE to a file path (recommended for a self-hosted deploy
+        # using real, paid providers).
+        provider = get_provider(name, use_cache=True, cache_path=os.environ.get("LLMQA_CACHE"))
         _PROVIDER_CACHE[name] = provider
     return provider
 
