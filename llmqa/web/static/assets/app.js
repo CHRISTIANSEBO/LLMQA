@@ -37,7 +37,6 @@ async function init() {
   initCompare(cfg.all_providers);
   initDownloads();
   initDatasetPeek();
-  initRace();
   initHistoryDiff();
   initTour();
   await loadHistory();
@@ -127,7 +126,7 @@ async function runEval() {
 
 /** Read a POST /api/run/stream Server-Sent-Events response, invoking
  *  onCase(result) for each completed case and onDone(summary) at the end.
- *  Shared by the main run flow and race mode so SSE parsing lives in one place. */
+ *  Kept as a small shared helper so SSE parsing lives in one place. */
 async function streamRun(body, onCase, onDone) {
   const resp = await fetch("/api/run/stream", {
     method: "POST",
@@ -744,93 +743,6 @@ function initDatasetPeek() {
 }
 
 // =====================================================================
-// Race mode — stream two providers through the dataset side by side
-// =====================================================================
-function initRace() {
-  const btn = $("#raceBtn");
-  if (btn) btn.addEventListener("click", runRace);
-}
-
-async function runRace() {
-  const provA = $("#cmp-a").value;
-  const provB = $("#cmp-b").value;
-  const arena = $("#raceArena");
-  const raceBtn = $("#raceBtn");
-  const cmpBtn = $("#cmpBtn");
-  const status = $("#cmp-status");
-  if (!arena) return;
-  if (provA === provB) { status.textContent = "\u26a0 pick two different providers to race"; return; }
-
-  raceBtn.disabled = true; if (cmpBtn) cmpBtn.disabled = true;
-  status.textContent = "";
-  const total = expectedCaseCount(null);
-  arena.hidden = false;
-  arena.innerHTML = raceLaneHtml("A", provA, total) + raceLaneHtml("B", provB, total)
-    + `<div class="race-winner" id="race-winner" hidden></div>`;
-
-  const metrics = selectedMetrics();
-  const state = {
-    A: { pass: 0, fail: 0, done: 0, run: null },
-    B: { pass: 0, fail: 0, done: 0, run: null },
-  };
-
-  const lane = (key) => (result) => {
-    const st = state[key];
-    st.done++;
-    if (result.passed) st.pass++; else st.fail++;
-    const chips = document.querySelector(`#race-chips-${key}`);
-    const chip = document.createElement("span");
-    chip.className = "race-chip " + (result.passed ? "ok" : "bad");
-    chip.textContent = result.passed ? "\u2713" : "\u2715";
-    chip.title = result.case_id;
-    chips.appendChild(chip);
-    document.querySelector(`#race-tally-${key}`).textContent =
-      `${st.pass}\u2713 ${st.fail}\u2715 \u00b7 ${st.done}/${total}`;
-    const pct = total ? Math.round((st.done / total) * 100) : 0;
-    document.querySelector(`#race-fill-${key}`).style.width = pct + "%";
-  };
-  const finish = (key) => (summary) => {
-    state[key].run = summary;
-    document.querySelector(`#race-fill-${key}`).style.width = "100%";
-  };
-
-  try {
-    await Promise.all([
-      streamRun({ provider: provA, metrics, store: false }, lane("A"), finish("A")),
-      streamRun({ provider: provB, metrics, store: false }, lane("B"), finish("B")),
-    ]);
-    const rA = state.A.run || {}, rB = state.B.run || {};
-    const winEl = $("#race-winner");
-    const aRate = rA.pass_rate || 0, bRate = rB.pass_rate || 0;
-    const aAvg = rA.avg_score || 0, bAvg = rB.avg_score || 0;
-    let msg;
-    if (aRate === bRate && aAvg === bAvg) {
-      msg = `\u2696\ufe0f Dead heat \u2014 both ${Math.round(aRate * 100)}% pass, avg ${aAvg.toFixed(2)}`;
-    } else {
-      const aWins = aRate > bRate || (aRate === bRate && aAvg > bAvg);
-      const win = aWins ? provA : provB;
-      const wr = aWins ? aRate : bRate, wa = aWins ? aAvg : bAvg;
-      msg = `\ud83c\udfc1 <strong>${win}</strong> wins \u2014 ${Math.round(wr * 100)}% pass, avg ${wa.toFixed(2)}`;
-    }
-    winEl.innerHTML = msg;
-    winEl.hidden = false;
-  } catch (e) {
-    status.textContent = "\u26a0 " + e.message;
-  } finally {
-    raceBtn.disabled = false; if (cmpBtn) cmpBtn.disabled = false;
-  }
-}
-
-function raceLaneHtml(key, provider, total) {
-  return `<div class="race-lane">
-    <div class="race-lane-head"><span class="race-prov">${provider}</span>
-      <span class="race-tally" id="race-tally-${key}">0\u2713 0\u2715 \u00b7 0/${total}</span></div>
-    <div class="race-track"><span class="race-fill" id="race-fill-${key}"></span></div>
-    <div class="race-chips" id="race-chips-${key}"></div>
-  </div>`;
-}
-
-// =====================================================================
 // History diff — drag (or click) two runs into slots and diff them
 // =====================================================================
 const SLOTS = { A: null, B: null };
@@ -972,10 +884,19 @@ const TOUR = [
   { sel: "#metrics", title: "Choose your metrics", body: "Each metric scores an answer differently: exact match, similarity, an LLM judge, and a hallucination check. Toggle whichever you care about." },
   { sel: "#runBtn", title: "Run the evaluation", body: "Cases stream back one at a time. Watch the progress bar tally passes and fails live as the run completes." },
   { sel: "#resultsPanel", title: "Read the results", body: "The bold metric is the one that gates a case's pass/fail. Click any row to see the input, model output, and expected answer \u2014 or re-run a single case." },
-  { sel: "#comparePanel", title: "Compare or race", body: "Run two providers over the same cases side by side, or hit Race mode to watch them stream case-by-case and crown a winner." },
+  { sel: "#comparePanel", title: "Compare providers", body: "Run two providers over the same golden cases and see exactly where they diverge, case by case." },
   { sel: "#trend", title: "Track quality over time", body: "Every stored run feeds the trend chart. Drag any two runs into the diff slots to see exactly which cases flipped." },
 ];
 let _tourIdx = 0;
+
+const TOUR_SEEN_KEY = "llmqa.tourSeen";
+
+function tourSeen() {
+  try { return localStorage.getItem(TOUR_SEEN_KEY) === "1"; } catch { return false; }
+}
+function markTourSeen() {
+  try { localStorage.setItem(TOUR_SEEN_KEY, "1"); } catch { /* private mode: no-op */ }
+}
 
 function initTour() {
   const btn = $("#tourBtn");
@@ -990,6 +911,10 @@ function initTour() {
     else if (e.key === "ArrowRight") stepTour(1);
     else if (e.key === "ArrowLeft") stepTour(-1);
   });
+  // First-time visitors get the tour offered once, automatically. After they
+  // finish or skip it we set a flag so it never auto-opens again (it stays
+  // available on demand via the tour button).
+  if (!tourSeen()) setTimeout(() => { if (!tourSeen()) startTour(); }, 900);
 }
 
 function startTour() {
@@ -1035,6 +960,7 @@ function endTour() {
   $("#tour").hidden = true;
   const tip = $("#tip");
   if (tip) tip.hidden = true;
+  markTourSeen();
 }
 
 init().catch((e) => { $("#status").textContent = "Init error: " + e.message; });
