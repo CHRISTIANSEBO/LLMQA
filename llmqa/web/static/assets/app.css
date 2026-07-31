@@ -184,6 +184,25 @@ main { max-width: 1040px; margin: 0 auto; padding: 30px 22px 60px; }
   padding-bottom: 8px; border-bottom: 1px solid var(--rule);
 }
 .hint { margin: -6px 0 16px; color: var(--muted); font-size: 12.5px; font-style: italic; }
+
+/* ---- Empty state (shown before the first run; always-fresh start) ---- */
+.empty-state { text-align: center; padding: 40px 24px 44px; }
+.empty-state h2 { border: none; padding: 0; margin: 0 0 10px; }
+.empty-illo { display: flex; flex-direction: column; align-items: center; gap: 16px; margin-bottom: 22px; }
+.empty-check { font-family: var(--mono); font-weight: 700; font-size: 20px; letter-spacing: 0.5px;
+  border: 1.5px solid var(--rule-strong); color: var(--ink); padding: 8px 12px; border-radius: 4px; opacity: 0.85; }
+.empty-skeleton { display: grid; gap: 8px; width: min(320px, 80%); }
+.empty-skeleton span { height: 12px; border-radius: 3px;
+  background: linear-gradient(90deg, var(--rule) 0%, var(--paper) 50%, var(--rule) 100%);
+  background-size: 200% 100%; animation: sk 1.6s ease-in-out infinite; }
+.empty-skeleton span:nth-child(2) { width: 88%; }
+.empty-skeleton span:nth-child(3) { width: 72%; }
+.empty-skeleton span:nth-child(4) { width: 80%; }
+@keyframes sk { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { .empty-skeleton span { animation: none; } }
+.empty-lead { margin: 0 auto 10px; max-width: 440px; font-size: 14.5px; color: var(--ink-2); line-height: 1.55; }
+.empty-lead strong { color: var(--ink); }
+.empty-note { margin: 0; font-size: 12.5px; color: var(--muted); font-style: italic; }
 td .mscore { margin-right: 12px; display: inline-block; }
 
 .control-row { display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-end; }

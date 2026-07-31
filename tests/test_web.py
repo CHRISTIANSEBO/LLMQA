@@ -39,6 +39,21 @@ def test_unknown_page_falls_back_to_home():
     assert "How it works" in r.text
 
 
+def test_startup_does_not_seed(monkeypatch, tmp_path):
+    """Always-fresh: app startup must NOT auto-populate the DB with preset runs.
+
+    Uses a throwaway DB and runs the real lifespan (context-managed client);
+    a fresh install must report an empty run history.
+    """
+    from llmqa.web import app as web_app
+
+    fresh_db = str(tmp_path / "fresh.db")
+    monkeypatch.setattr(web_app, "DB_PATH", fresh_db)
+    with TestClient(web_app.app) as c:  # entering the context runs lifespan
+        runs = c.get("/api/history").json()["runs"]
+    assert runs == [], "startup must not seed preset runs"
+
+
 def test_health():
     r = client.get("/api/health")
     assert r.status_code == 200
