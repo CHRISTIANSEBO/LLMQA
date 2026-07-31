@@ -1,0 +1,77 @@
+- id: capital-france
+  input: What is the capital of France?
+  expected: Paris
+  tags: ["geography", "capital", "europe"]
+  gate_metrics: ["exact_match"]
+
+- id: chemical-symbol-gold
+  input: What is the chemical symbol for gold?
+  expected: Au
+  tags: ["science", "chemistry", "periodic-table"]
+  gate_metrics: ["exact_match"]
+
+- id: ww2-end-year
+  input: In what year did World War II end in Europe?
+  expected: "1945"
+  tags: ["history", "world-war-ii", "europe"]
+  gate_metrics: ["exact_match"]
+
+- id: planet-largest
+  input: Which planet in our solar system is the largest by volume?
+  expected: Jupiter
+  tags: ["science", "astronomy", "planets"]
+  gate_metrics: ["exact_match"]
+
+- id: math-15-times-7
+  input: What is 15 multiplied by 7?
+  expected: "105"
+  tags: ["math", "arithmetic", "multiplication"]
+  gate_metrics: ["exact_match"]
+
+- id: mount-everest-height
+  input: What is the approximate height of Mount Everest in meters?
+  expected: "8848"
+  tags: ["geography", "mountains", "nepal"]
+  gate_metrics: ["similarity"]
+
+- id: photosynthesis-reactants
+  input: What are the primary reactants in the photosynthesis process?
+  expected: carbon dioxide and water
+  tags: ["science", "biology", "photosynthesis"]
+  gate_metrics: ["similarity"]
+
+- id: declaration-independence-year
+  input: In what year was the United States Declaration of Independence adopted?
+  expected: "1776"
+  tags: ["history", "american-revolution", "united-states"]
+  gate_metrics: ["exact_match"]
+
+- id: speed-of-light
+  input: What is the speed of light in a vacuum, in kilometers per second?
+  expected: "299792"
+  tags: ["science", "physics", "constants"]
+  gate_metrics: ["similarity"]
+
+- id: square-root-144
+  input: What is the square root of 144?
+  expected: "12"
+  tags: ["math", "algebra", "roots"]
+  gate_metrics: ["exact_match"]
+
+- id: longest-river
+  input: What is the longest river in the world?
+  expected: Nile
+  tags: ["geography", "rivers", "africa"]
+  gate_metrics: ["exact_match"]
+
+- id: atomic-number-carbon
+  input: What is the atomic number of carbon?
+  expected: "6"
+  tags: ["science", "chemistry", "periodic-table"]
+  gate_metrics: ["exact_match"]
+
+- id: battle-waterloo-year
+  input: In what year was the Battle of Waterloo fought?
+  expected: "1815"
+  tags: ["history", "napoleonic-wars", "europe"]
+  gate_metrics: ["exact_match"]

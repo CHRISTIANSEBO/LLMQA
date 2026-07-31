@@ -4,46 +4,45 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>LLMQA — LLM Quality Assurance</title>
-<meta name="description" content="LLMQA is an open-source harness for making LLM quality measurable, reviewable, and gate-able in CI — golden datasets, pluggable metrics, quality gates, and regression detection. Free, key-optional, provider-agnostic." />
-<meta name="theme-color" content="#111111" />
-<link rel="canonical" href="https://llmqa-production.up.railway.app/" />
-<!-- Open Graph -->
-<meta property="og:type" content="website" />
-<meta property="og:site_name" content="LLMQA" />
-<meta property="og:title" content="LLMQA — LLM Quality Assurance" />
-<meta property="og:description" content="Open-source harness that treats LLM outputs like software you can test: golden datasets, pluggable metrics, CI quality gates, and regression detection." />
-<meta property="og:url" content="https://llmqa-production.up.railway.app/" />
-<meta property="og:image" content="https://llmqa-production.up.railway.app/assets/og-image.png" />
-<!-- Twitter -->
-<meta name="twitter:card" content="summary_large_image" />
-<meta name="twitter:title" content="LLMQA — LLM Quality Assurance" />
-<meta name="twitter:description" content="Open-source harness that treats LLM outputs like software you can test. Golden datasets, pluggable metrics, CI quality gates, regression detection." />
-<meta name="twitter:image" content="https://llmqa-production.up.railway.app/assets/og-image.png" />
+<meta name="description" content="LLMQA is an open-source harness for making LLM quality measurable, reviewable, and gate-able in CI — free, key-optional, and provider-agnostic." />
+<script>
+  /* Set the theme before paint to avoid a flash of the wrong palette.
+     Only an explicit stored choice is applied here; otherwise CSS follows the
+     OS via prefers-color-scheme. */
+  (function () {
+    try {
+      var t = localStorage.getItem("llmqa-theme");
+      if (t === "light" || t === "dark")
+        document.documentElement.setAttribute("data-theme", t);
+    } catch (e) {}
+  })();
+</script>
 <link rel="stylesheet" href="/assets/app.css" />
 <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg" />
 </head>
 <body>
-<a class="skip-link" href="#main-content">Skip to content</a>
+<a class="skip-link" href="#main">Skip to content</a>
 <header class="topbar">
-  <div class="brand">
-    <span class="logo">✓QA</span>
+  <a class="brand" href="/">
+    <img class="brand-logo brand-logo--light" src="/assets/logo-light.svg" alt="" width="40" height="40" aria-hidden="true" />
+    <img class="brand-logo brand-logo--dark" src="/assets/logo-dark.svg" alt="" width="40" height="40" aria-hidden="true" />
     <div>
       <h1>LLMQA</h1>
       <p class="tagline">LLM Quality Assurance — evaluate models like software you can test</p>
     </div>
-  </div>
+  </a>
   <nav class="topnav" aria-label="primary">
-    <a href="#about">About</a>
-    <a href="https://github.com/CHRISTIANSEBO/LLMQA#readme" target="_blank" rel="noopener">Docs</a>
-    <a href="/docs" target="_blank" rel="noopener" title="Interactive API docs">API</a>
-    <a href="https://github.com/CHRISTIANSEBO/LLMQA/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">Contribute</a>
-    <button id="themeToggle" class="theme-toggle" type="button" aria-label="Toggle dark mode" title="Toggle dark mode">◐</button>
-    <a class="gh-star" id="ghStar" href="https://github.com/CHRISTIANSEBO/LLMQA" target="_blank" rel="noopener" aria-label="Star LLMQA on GitHub">★ Star on GitHub</a>
+    <a href="/" aria-current="page">Home</a>
+    <a href="/dashboard">Dashboard</a>
+    <a href="/docs">Docs</a>
+    <a href="/about">About</a>
+    <button type="button" id="theme-toggle" class="theme-toggle" aria-label="Switch to dark theme" title="Switch to dark theme" aria-pressed="false"><span class="tt-glyph" aria-hidden="true">☀</span></button>
+    <a class="gh-star" href="https://github.com/CHRISTIANSEBO/LLMQA" target="_blank" rel="noopener" aria-label="Star LLMQA on GitHub">★ Star on GitHub</a>
   </nav>
 </header>
 
-<main id="main-content">
-  <section class="lede" id="about">
+<main id="main">
+  <section class="lede">
     <p class="edition">Open Source · MIT Licensed · v0.2</p>
     <p class="standfirst">LLMQA is an open-source harness for making LLM quality
       <em>measurable, reviewable, and gate-able in CI</em> — free, key-optional,
@@ -55,144 +54,79 @@
       <span class="osbadge">Python 3.11+</span>
       <span class="osbadge">CI-gated</span>
       <span class="osbadge">Provider-agnostic</span>
-      <a class="osbadge osbadge--cta" href="https://github.com/CHRISTIANSEBO/LLMQA" target="_blank" rel="noopener">★ Star on GitHub</a>
+      <a class="osbadge osbadge--cta" href="/dashboard">▶ Try the live dashboard</a>
     </div>
-    <p class="demo-note">This hosted demo runs the free, deterministic <code>mock</code>
+    <p class="demo-note">The hosted dashboard runs the free, deterministic <code>mock</code>
       provider only — no API key, no cost. Clone the repo and add your own
       <code>ANTHROPIC_API_KEY</code>, <code>OPENAI_API_KEY</code>, or
       <code>XAI_API_KEY</code> to evaluate live models.</p>
-    <ol class="howto" aria-label="How it works">
-      <li><span class="howto-n">1</span><span class="howto-t"><strong>Golden dataset</strong> — tagged Q&amp;A cases with expected answers.</span></li>
-      <li><span class="howto-n">2</span><span class="howto-t"><strong>Metrics &amp; gates</strong> — exact match, similarity, LLM-judge, hallucination; per-case gating.</span></li>
-      <li><span class="howto-n">3</span><span class="howto-t"><strong>Pass / fail in CI</strong> — quality &amp; regression gates fail the build on a drop.</span></li>
-    </ol>
-  </section>
-
-  <section class="panel controls">
-    <h2>Run an evaluation</h2>
-    <div class="control-row">
-      <label>Provider
-        <select id="provider"></select>
-      </label>
-      <label>Tags (optional)
-        <input id="tags" type="text" placeholder="e.g. factual rag" />
-      </label>
-      <label class="checkbox">
-        <input id="store" type="checkbox" checked /> Save to history
-      </label>
-    </div>
-    <fieldset id="metrics" class="metrics">
-      <legend>Metrics</legend>
-    </fieldset>
-    <div class="run-actions">
-      <button id="runBtn" class="run">Run evaluation</button>
-      <button id="presetBtn" class="run run--ghost" type="button" title="Run the mock-legacy provider to see the gates catch a regression">▶ Show a regression</button>
-      <span id="status" class="status" role="status" aria-live="polite"></span>
-    </div>
-  </section>
-
-  <section class="cards" id="summary" hidden>
-    <div class="card"><span class="k">Pass rate</span><span class="v" id="s-pass">—</span></div>
-    <div class="card"><span class="k">Avg score</span><span class="v" id="s-score">—</span></div>
-    <div class="card"><span class="k">Model</span><span class="v small" id="s-model">—</span></div>
-    <div class="card"><span class="k">Cost</span><span class="v" id="s-cost">—</span></div>
-  </section>
-
-  <section class="panel" id="resultsPanel" hidden>
-    <h2>Case results</h2>
-    <p class="hint">Bold metric = gates this case's pass/fail. Others are informational — a case can PASS with a low non-gating score (e.g. a summary shouldn't fail on exact string match).</p>
-    <div id="tagFilter" class="tag-filter-bar" aria-label="Filter by tag"></div>
-    <div class="legend" aria-label="score legend">
-      <span class="pass"><span class="g">✓</span> pass · score ≥ the metric's threshold</span>
-      <span class="mid"><span class="g">✓</span> pass (marginal) · passed but score &lt; 0.80</span>
-      <span class="fail"><span class="g">✕</span> fail · score &lt; the metric's threshold</span>
-    </div>
-    <div class="table-wrap">
-      <table id="results">
-        <thead><tr><th>Case</th><th>Result</th><th>Tags</th><th>Latency</th><th class="metric-cols">Metrics</th></tr></thead>
-        <tbody></tbody>
-      </table>
-    </div>
-  </section>
-
-  <section class="panel" id="comparePanel">
-    <h2>Compare providers</h2>
-    <p class="hint">Run the same dataset through two providers side-by-side and see exactly where they diverge.</p>
-    <div class="control-row">
-      <label>Provider A
-        <select id="cmp-a"></select>
-      </label>
-      <label>Provider B
-        <select id="cmp-b"></select>
-      </label>
-      <button id="cmpBtn" class="run">Compare</button>
-      <span id="cmp-status" class="status"></span>
-    </div>
-    <div id="cmp-results" hidden>
-      <div class="cmp-summary" id="cmp-summary"></div>
-      <div id="cmp-chart" class="cmp-chart" aria-label="comparison chart"></div>
-      <div class="table-wrap">
-        <table id="cmp-table">
-          <thead><tr id="cmp-head"></tr></thead>
-          <tbody id="cmp-body"></tbody>
-        </table>
-      </div>
-    </div>
   </section>
 
   <section class="panel">
-    <h2>Quality trend</h2>
-    <div id="trend" class="trend">No history yet — run an evaluation.</div>
-    <div class="table-wrap">
-      <table id="history">
-        <thead><tr><th>#</th><th>When</th><th>Provider / model</th><th>Pass</th><th>Avg</th><th>Cost</th></tr></thead>
-        <tbody></tbody>
-      </table>
+    <h2>How it works</h2>
+    <ol class="steps">
+      <li>
+        <span class="step-n">1</span>
+        <div>
+          <strong>Define a golden dataset.</strong>
+          A YAML file of test cases — input, expected answer, tags, and optional
+          grounding context. Each case declares which metric(s) gate its pass/fail.
+        </div>
+      </li>
+      <li>
+        <span class="step-n">2</span>
+        <div>
+          <strong>Run the evaluation.</strong>
+          LLMQA sends every case through your provider and scores each with the
+          metrics you pick — exact match, similarity, LLM-as-judge, hallucination.
+        </div>
+      </li>
+      <li>
+        <span class="step-n">3</span>
+        <div>
+          <strong>Gate it in CI.</strong>
+          A pass-rate threshold or regression check returns a non-zero exit code,
+          so a bad model or prompt change fails the build instead of shipping.
+        </div>
+      </li>
+    </ol>
+  </section>
+
+  <section class="feature-grid">
+    <div class="panel feature">
+      <h3>Quality gates</h3>
+      <p>Set <code>--min-pass-rate</code> and the run exits non-zero when quality
+        drops below the bar. Drop it into any CI pipeline in one line.</p>
+    </div>
+    <div class="panel feature">
+      <h3>Regression detection</h3>
+      <p>Compare against a stored baseline. If the average score falls beyond your
+        tolerance, the build fails with a clear diff of what regressed.</p>
+    </div>
+    <div class="panel feature">
+      <h3>Provider-agnostic</h3>
+      <p>Deterministic mock providers for free, key-optional testing — or bring
+        your own Anthropic, OpenAI, or xAI key for live model evals.</p>
+    </div>
+    <div class="panel feature">
+      <h3>Reviewable reports</h3>
+      <p>Per-case results, gating metrics, latency, and cost — as a console table,
+        Markdown export, or the interactive dashboard.</p>
     </div>
   </section>
 
-  <section class="panel" id="ciPanel">
-    <h2>Add to your CI</h2>
-    <p class="hint">Drop this into <code>.github/workflows/llmqa.yml</code> to fail a build when quality drops. The key-free <code>mock</code> provider keeps CI fast, free, and deterministic.</p>
-    <div class="code-block">
-      <button class="copy-btn" id="copyCi" type="button" aria-label="Copy workflow YAML">Copy</button>
-      <pre id="ciYaml"><code>name: llmqa
-on: [push, pull_request]
-jobs:
-  eval:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - run: pip install -r requirements-dev.txt
-      # Quality gate: fail if pass rate &lt; 80%
-      - run: python cli.py run --provider mock --min-pass-rate 0.8
-      # Regression gate: fail if avg score drops vs the last stored run
-      - run: python cli.py run --provider mock --regression</code></pre>
+  <section class="panel cta-panel">
+    <h2>Get started</h2>
+    <p class="cta-lead">Try the interactive dashboard, read the docs, or star the repo.</p>
+    <div class="cta-row">
+      <a class="run cta-btn" href="/dashboard">▶ Open the dashboard</a>
+      <a class="ghost-btn" href="/docs">Read the docs</a>
+      <a class="ghost-btn" href="https://github.com/CHRISTIANSEBO/LLMQA" target="_blank" rel="noopener">★ Star on GitHub</a>
     </div>
-  </section>
-
-  <section class="panel colophon" id="contribute">
-    <h2>Open source &amp; contributing</h2>
-    <p>LLMQA is MIT-licensed and built in the open. Issues, ideas, and pull
-      requests are welcome — new metrics, new providers, more golden-dataset
-      cases, or docs. The deterministic <code>mock</code> providers mean the full
-      test suite and CI gates run for free, without any API key.</p>
-    <ul class="colophon-links">
-      <li><a href="https://github.com/CHRISTIANSEBO/LLMQA" target="_blank" rel="noopener">Repository</a></li>
-      <li><a href="https://github.com/CHRISTIANSEBO/LLMQA/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">Contributing guide</a></li>
-      <li><a href="https://github.com/CHRISTIANSEBO/LLMQA/blob/main/CODE_OF_CONDUCT.md" target="_blank" rel="noopener">Code of conduct</a></li>
-      <li><a href="https://github.com/CHRISTIANSEBO/LLMQA/discussions" target="_blank" rel="noopener">Discussions</a></li>
-      <li><a href="https://github.com/CHRISTIANSEBO/LLMQA/blob/main/SECURITY.md" target="_blank" rel="noopener">Security policy</a></li>
-      <li><a href="https://github.com/CHRISTIANSEBO/LLMQA/blob/main/LICENSE" target="_blank" rel="noopener">MIT license</a></li>
-    </ul>
   </section>
 </main>
 
 <footer>LLMQA v0.2 · open-source LLM evaluation harness · MIT licensed · maintained by <a href="https://github.com/CHRISTIANSEBO" target="_blank" rel="noopener">@CHRISTIANSEBO</a></footer>
-
-<script src="/assets/app.js"></script>
+<script src="/assets/theme.js"></script>
 </body>
 </html>

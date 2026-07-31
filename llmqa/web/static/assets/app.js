@@ -7,12 +7,28 @@ const api = (path, opts) => fetch(path, opts).then(async (r) => {
 });
 
 let METRIC_ORDER = [];
-let CASE_MAP = {}; // case_id → {input, expected, context}
+let CASE_MAP = {}; // case_id → {input, expected, context, tags, gate_metrics}
+let CURRENT_DATASET = null; // selected dataset file name
+let LAST_RUN = null; // {summary, results} of the most recent single-provider run
+let RUN_SUMMARY = {}; // run_id → history summary row (for the diff slots)
 
 async function init() {
   const cfg = await api("/api/config");
   METRIC_ORDER = cfg.metrics;
-  (cfg.cases || []).forEach(c => { CASE_MAP[c.id] = c; });
+  CURRENT_DATASET = cfg.default_dataset || cfg.dataset;
+  applyCases(cfg.cases);
+
+  const dsSel = $("#dataset");
+  if (dsSel) {
+    (cfg.datasets || [cfg.dataset]).forEach((name) => {
+      const opt = document.createElement("option");
+      opt.value = name;
+      opt.textContent = name.replace(/\.ya?ml$/i, "");
+      dsSel.appendChild(opt);
+    });
+    dsSel.value = CURRENT_DATASET;
+    dsSel.addEventListener("change", onDatasetChange);
+  }
 
   const provSel = $("#provider");
   cfg.all_providers.forEach((p) => {
@@ -32,118 +48,54 @@ async function init() {
   });
 
   $("#runBtn").addEventListener("click", runEval);
-  $("#presetBtn").addEventListener("click", runPreset);
-  setupCopy();
-  setupTheme();
-  loadStarCount();
   initCompare(cfg.all_providers);
+  initDownloads();
+  initDatasetPeek();
+  initHistoryDiff();
+  initTour();
   await loadHistory();
-  await handlePermalink();
+  // Always start fresh: no preset runs and no auto-loaded previous run. The
+  // results area shows an empty-state prompt until you trigger a run yourself.
+  showEmptyState();
 }
 
-// Load a specific stored run by id and render it. Returns true on success.
-async function loadRunById(id) {
-  const full = await api(`/api/runs/${id}`);
-  if (!full.detail) return false;
-  const run = full.detail;
-  // The stored detail lacks computed aggregates; take them from the summary.
-  run.provider = full.provider;
-  run.model = full.model;
-  run.pass_rate = full.pass_rate;
-  run.avg_score = full.avg_score;
-  run.total_cost_usd = full.cost_usd;
-  renderRun(run);
-  $("#status").textContent = `Showing saved run #${full.id}`;
-  return true;
-}
-
-// On first load, show the most recent stored run so the page isn't empty.
-async function loadLatestRun() {
-  try {
-    const { runs } = await api("/api/history?limit=1");
-    if (!runs.length) return;
-    await loadRunById(runs[0].id);
-  } catch (_) { /* non-fatal */ }
-}
-
-// Deep-link support: /?run=<id> loads that run; otherwise show the latest.
-async function handlePermalink() {
-  const id = new URLSearchParams(location.search).get("run");
-  if (id) {
-    try { if (await loadRunById(id)) return; } catch (_) { /* fall through */ }
-  }
-  await loadLatestRun();
-}
-
-// One-click demo: run the deterministic mock-legacy provider so visitors can
-// watch the quality gate catch a regression without knowing which knob to turn.
-async function runPreset() {
-  const sel = $("#provider");
-  const legacy = [...sel.options].find((o) => o.value === "mock-legacy" && !o.disabled);
-  if (legacy) sel.value = "mock-legacy";
-  $("#tags").value = "";
-  document.querySelectorAll("#metrics input").forEach((i) => { i.checked = true; });
-  await runEval();
-}
-
-// Copy the CI workflow snippet.
-function setupCopy() {
-  const btn = $("#copyCi");
-  if (!btn) return;
-  btn.addEventListener("click", async () => {
-    const text = $("#ciYaml").innerText;
-    try {
-      await navigator.clipboard.writeText(text);
-    } catch (_) {
-      const ta = document.createElement("textarea");
-      ta.value = text; document.body.appendChild(ta); ta.select();
-      try { document.execCommand("copy"); } catch (e) {}
-      ta.remove();
-    }
-    btn.textContent = "Copied \u2713";
-    btn.classList.add("copied");
-    setTimeout(() => { btn.textContent = "Copy"; btn.classList.remove("copied"); }, 1600);
-  });
-}
-
-// Live GitHub star count on the CTA (best-effort; unauthenticated API).
-async function loadStarCount() {
-  try {
-    const r = await fetch("https://api.github.com/repos/CHRISTIANSEBO/LLMQA");
-    if (!r.ok) return;
-    const d = await r.json();
-    if (typeof d.stargazers_count === "number") {
-      $("#ghStar").textContent = `\u2605 Star ${d.stargazers_count.toLocaleString()}`;
-    }
-  } catch (_) { /* non-fatal */ }
-}
-
-// Dark / light theme toggle. OS preference by default; user choice persists.
-function setupTheme() {
-  const root = document.documentElement;
-  const toggle = $("#themeToggle");
-  const saved = localStorage.getItem("llmqa-theme");
-  if (saved === "dark" || saved === "light") root.setAttribute("data-theme", saved);
-  const prefersDark = () => window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
-  const isDark = () => (root.getAttribute("data-theme") || (prefersDark() ? "dark" : "light")) === "dark";
-  const sync = () => {
-    if (!toggle) return;
-    toggle.textContent = isDark() ? "\u25d1" : "\u25d0";
-    toggle.setAttribute("aria-pressed", String(isDark()));
-  };
-  sync();
-  if (toggle) toggle.addEventListener("click", () => {
-    const next = isDark() ? "light" : "dark";
-    root.setAttribute("data-theme", next);
-    localStorage.setItem("llmqa-theme", next);
-    sync();
-    // The trend chart bakes CSS ink colors at render time; re-render on switch.
-    loadHistory();
-  });
+// Friendly "nothing here yet" prompt shown before the first run so the page
+// never looks broken or blank on arrival.
+function showEmptyState() {
+  const panel = $("#resultsPanel");
+  const empty = $("#resultsEmpty");
+  if (empty) empty.hidden = false;
+  if (panel) panel.hidden = true;
+  $("#summary").hidden = true;
 }
 
 function selectedMetrics() {
   return [...document.querySelectorAll('#metrics input:checked')].map((i) => i.value);
+}
+
+// Rebuild the case lookup (used by row detail, dataset peek, and the progress
+// denominator) from a /api/config cases array.
+function applyCases(cases) {
+  CASE_MAP = {};
+  (cases || []).forEach((c) => { CASE_MAP[c.id] = c; });
+}
+
+// Switching datasets refetches that dataset's cases and resets the results.
+async function onDatasetChange(e) {
+  CURRENT_DATASET = e.target.value;
+  try {
+    const cfg = await api(`/api/config?dataset=${encodeURIComponent(CURRENT_DATASET)}`);
+    applyCases(cfg.cases);
+    initDatasetPeek();
+    $("#results tbody").innerHTML = "";
+    const verdictEl = $("#verdict"); if (verdictEl) verdictEl.hidden = true;
+    setDownloadsEnabled(false);
+    LAST_RUN = null;
+    showEmptyState();
+    $("#status").textContent = `Dataset: ${CURRENT_DATASET.replace(/\.ya?ml$/i, "")}`;
+  } catch (err) {
+    $("#status").textContent = "\u26a0 " + err.message;
+  }
 }
 
 async function runEval() {
@@ -152,75 +104,142 @@ async function runEval() {
   btn.disabled = true;
 
   // Reset UI for a fresh streaming run
+  const emptyState = $("#resultsEmpty");
+  if (emptyState) emptyState.hidden = true;
   $("#summary").hidden = true;
   $("#resultsPanel").hidden = false;
   $("#results tbody").innerHTML = "";
   const tagFilterBar = document.getElementById("tagFilter");
   if (tagFilterBar) tagFilterBar.innerHTML = "";
 
+  const verdictEl = $("#verdict");
+  if (verdictEl) verdictEl.hidden = true;
+
   const tags = $("#tags").value.trim().split(/\s+/).filter(Boolean);
+  const tagList = tags.length ? tags : null;
   const body = {
     provider: $("#provider").value,
     metrics: selectedMetrics(),
-    tags: tags.length ? tags : null,
+    tags: tagList,
+    dataset: CURRENT_DATASET,
     store: $("#store").checked,
   };
 
+  const total = expectedCaseCount(tagList);
   const streamedResults = [];
-  let caseCount = 0;
+  let caseCount = 0, passCount = 0, failCount = 0;
+  updateProgress(0, total, 0, 0);
 
   try {
-    const resp = await fetch("/api/run/stream", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    if (!resp.ok) {
-      const err = await resp.json().catch(() => ({}));
-      throw new Error(err.detail || `HTTP ${resp.status}`);
-    }
-
-    const reader = resp.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-
-      const parts = buffer.split("\n\n");
-      buffer = parts.pop();
-
-      for (const part of parts) {
-        const line = part.trim();
-        if (!line.startsWith("data: ")) continue;
-        let event;
-        try { event = JSON.parse(line.slice(6)); } catch { continue; }
-
-        if (event.type === "case") {
-          caseCount++;
-          status.textContent = `Evaluating case ${caseCount}…`;
-          streamedResults.push(event.result);
-          appendCaseRow(event.result);
-        } else if (event.type === "done") {
-          $("#summary").hidden = false;
-          const pct = Math.round(event.pass_rate * 100);
-          $("#s-pass").textContent = `${pct}%`;
-          $("#s-score").textContent = event.avg_score.toFixed(2);
-          $("#s-model").textContent = `${event.provider}/${event.model}`;
-          $("#s-cost").textContent = "$" + (event.total_cost_usd || 0).toFixed(4);
-          status.textContent = `Done — ${caseCount} cases`;
-          renderTagFilter(streamedResults);
-          await loadHistory();
-        }
+    await streamRun(
+      body,
+      (result) => {
+        caseCount++;
+        if (result.passed) passCount++; else failCount++;
+        status.textContent = `Evaluating case ${caseCount}…`;
+        streamedResults.push(result);
+        appendCaseRow(result);
+        updateProgress(caseCount, total, passCount, failCount);
+      },
+      async (event) => {
+        $("#summary").hidden = false;
+        const pct = Math.round(event.pass_rate * 100);
+        $("#s-pass").textContent = `${pct}%`;
+        $("#s-score").textContent = event.avg_score.toFixed(2);
+        $("#s-model").textContent = `${event.provider}/${event.model}`;
+        $("#s-cost").textContent = "$" + (event.total_cost_usd || 0).toFixed(4);
+        status.textContent = `Done — ${caseCount} cases`;
+        updateProgress(caseCount, caseCount, passCount, failCount);
+        renderTagFilter(streamedResults);
+        LAST_RUN = { summary: event, results: streamedResults };
+        renderVerdict(event, streamedResults);
+        setDownloadsEnabled(true);
+        await loadHistory();
       }
-    }
+    );
   } catch (e) {
     status.textContent = "⚠ " + e.message;
   } finally {
     btn.disabled = false;
   }
+}
+
+/** Read a POST /api/run/stream Server-Sent-Events response, invoking
+ *  onCase(result) for each completed case and onDone(summary) at the end.
+ *  Kept as a small shared helper so SSE parsing lives in one place. */
+async function streamRun(body, onCase, onDone) {
+  const resp = await fetch("/api/run/stream", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({}));
+    throw new Error(err.detail || `HTTP ${resp.status}`);
+  }
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const parts = buffer.split("\n\n");
+    buffer = parts.pop();
+    for (const part of parts) {
+      const line = part.trim();
+      if (!line.startsWith("data: ")) continue;
+      let event;
+      try { event = JSON.parse(line.slice(6)); } catch { continue; }
+      if (event.type === "case") onCase(event.result);
+      else if (event.type === "done") onDone(event);
+    }
+  }
+}
+
+// Expected number of cases for a given tag filter (drives the progress bar's
+// denominator before any case has streamed back).
+function expectedCaseCount(tags) {
+  const all = Object.values(CASE_MAP);
+  if (!tags || !tags.length) return all.length;
+  const want = new Set(tags);
+  return all.filter((c) => (c.tags || []).some((t) => want.has(t))).length;
+}
+
+function updateProgress(done, total, pass, fail) {
+  const wrap = $("#runProgress");
+  if (!wrap) return;
+  wrap.hidden = false;
+  wrap.setAttribute("aria-hidden", "false");
+  $("#rp-count").textContent = `${done} / ${total || "?"}`;
+  $("#rp-pass").textContent = `\u2713 ${pass}`;
+  $("#rp-fail").textContent = `\u2715 ${fail}`;
+  const pct = total ? Math.min(100, Math.round((done / total) * 100)) : 0;
+  $("#rp-fill").style.width = pct + "%";
+}
+
+// One-line human verdict shown above the results table once a run completes.
+function renderVerdict(summary, results) {
+  const el = $("#verdict");
+  if (!el) return;
+  const total = results.length;
+  const passed = results.filter((r) => r.passed).length;
+  const failed = total - passed;
+  const pct = Math.round((summary.pass_rate || 0) * 100);
+  const failing = results.filter((r) => !r.passed).map((r) => r.case_id);
+  let tail = "";
+  if (failed) {
+    const shown = failing.slice(0, 4).join(", ");
+    const more = failing.length > 4 ? ` +${failing.length - 4} more` : "";
+    tail = ` \u2014 review <span class="v-fail">${shown}${more}</span>`;
+  } else {
+    tail = " \u2014 clean sweep.";
+  }
+  el.className = "verdict " + (failed === 0 ? "ok" : "warn");
+  el.innerHTML = `<strong>${passed}/${total}</strong> cases passed (${pct}%) \u00b7 avg score `
+    + `<strong>${(summary.avg_score || 0).toFixed(2)}</strong> \u00b7 `
+    + `${summary.provider}/${summary.model}${tail}`;
+  el.hidden = false;
 }
 
 /** Build a result <tr> for one case — shared by renderRun and appendCaseRow. */
@@ -359,26 +378,32 @@ function applyTagFilter() {
 
 async function loadHistory() {
   const { runs } = await api("/api/history?limit=30");
+  RUN_SUMMARY = {};
   const tbody = $("#history tbody");
   tbody.innerHTML = "";
   runs.forEach((r) => {
+    RUN_SUMMARY[r.id] = r;
     const tr = document.createElement("tr");
+    tr.className = "hist-row";
+    tr.draggable = true;
+    tr.dataset.runId = r.id;
+    tr.title = "Drag into a slot above — or click to add to the diff";
     tr.innerHTML = `<td>${r.id}</td>
       <td>${(r.timestamp || "").replace("T", " ").replace("+00:00", "")}</td>
       <td>${r.provider}/${r.model}</td>
       <td>${Math.round(r.pass_rate * 100)}%</td>
       <td>${r.avg_score.toFixed(2)}</td>
       <td>$${(r.cost_usd || 0).toFixed(4)}</td>`;
-    tr.style.cursor = "pointer";
-    tr.title = "Load this run (updates the shareable link)";
-    tr.addEventListener("click", () => {
-      loadRunById(r.id).catch(() => {});
-      history.replaceState(null, "", `?run=${r.id}`);
-      const rp = $("#resultsPanel");
-      if (rp) rp.scrollIntoView({ behavior: "smooth", block: "start" });
+    tr.addEventListener("dragstart", (e) => {
+      e.dataTransfer.setData("text/plain", String(r.id));
+      e.dataTransfer.effectAllowed = "copy";
+      tr.classList.add("dragging");
     });
+    tr.addEventListener("dragend", () => tr.classList.remove("dragging"));
+    tr.addEventListener("click", () => assignRunToNextSlot(r.id));
     tbody.appendChild(tr);
   });
+  refreshSlots();
   renderTrend(runs);
 }
 
@@ -454,7 +479,7 @@ async function runCompare() {
     const data = await api("/api/compare", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ providers: [provA, provB] }),
+      body: JSON.stringify({ providers: [provA, provB], dataset: CURRENT_DATASET }),
     });
     renderComparison(data);
     status.textContent = "";
@@ -606,17 +631,377 @@ function toggleDetail(e) {
   const detail = document.createElement("tr");
   detail.className = "detail-row";
   const ctx = c.has_context ? `<div class="detail-field"><span class="dl">Context</span><pre class="dv ctx">${esc(c.context || "—")}</pre></div>` : "";
-  detail.innerHTML = `<td colspan="4" class="detail-cell">
+  detail.innerHTML = `<td colspan="5" class="detail-cell">
     <div class="detail-grid">
       <div class="detail-field"><span class="dl">Input</span><pre class="dv">${esc(c.input || "—")}</pre></div>
       ${ctx}
       <div class="detail-field"><span class="dl">Model output</span><pre class="dv out">${esc(output || "—")}</pre></div>
       <div class="detail-field"><span class="dl">Expected</span><pre class="dv exp">${esc(c.expected || "—")}</pre></div>
     </div>
+    <div class="detail-actions">
+      <button class="mini-btn rerun-btn" type="button">\u21bb Re-run just this case</button>
+      <span class="rerun-status" aria-live="polite"></span>
+    </div>
   </td>`;
   tr.after(detail);
   tr.classList.add("expanded");
   if (toggle) toggle.innerHTML = `\u25be ${caseId}`;
+  const rerunBtn = detail.querySelector(".rerun-btn");
+  if (rerunBtn) rerunBtn.addEventListener("click", (ev) => {
+    ev.stopPropagation();
+    rerunCase(caseId, tr, detail);
+  });
+}
+
+// Re-run a single case through the currently selected provider/metrics using
+// the backend's case_ids filter. Result is not stored (store:false) so the
+// history stays a log of full runs. The row is refreshed in place.
+async function rerunCase(caseId, row, detailRow) {
+  const statusEl = detailRow.querySelector(".rerun-status");
+  const btn = detailRow.querySelector(".rerun-btn");
+  if (btn) btn.disabled = true;
+  if (statusEl) statusEl.textContent = "running\u2026";
+  try {
+    const data = await api("/api/run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        provider: $("#provider").value,
+        metrics: selectedMetrics(),
+        case_ids: [caseId],
+        dataset: CURRENT_DATASET,
+        store: false,
+      }),
+    });
+    const r = (data.results || []).find((x) => x.case_id === caseId) || (data.results || [])[0];
+    if (!r) throw new Error("case not found in response");
+    const fresh = buildResultRow(r);
+    fresh.classList.add("flash");
+    detailRow.remove();
+    row.replaceWith(fresh);
+  } catch (e) {
+    if (statusEl) statusEl.textContent = "\u26a0 " + e.message;
+    if (btn) btn.disabled = false;
+  }
+}
+
+// =====================================================================
+// Report downloads (Markdown / JSON) for the most recent run
+// =====================================================================
+function setDownloadsEnabled(on) {
+  ["#dl-md", "#dl-json"].forEach((sel) => {
+    const b = document.querySelector(sel);
+    if (b) b.disabled = !on;
+  });
+}
+
+function initDownloads() {
+  setDownloadsEnabled(false);
+  const md = $("#dl-md"), js = $("#dl-json");
+  if (md) md.addEventListener("click", () => {
+    if (!LAST_RUN) return;
+    downloadFile(reportFilename("md"), buildReportMarkdown(), "text/markdown");
+  });
+  if (js) js.addEventListener("click", () => {
+    if (!LAST_RUN) return;
+    downloadFile(reportFilename("json"), buildReportJSON(), "application/json");
+  });
+}
+
+function reportFilename(ext) {
+  const s = LAST_RUN.summary || {};
+  const prov = (s.provider || "run").replace(/[^a-z0-9-]/gi, "-");
+  const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "");
+  return `llmqa-${prov}-${stamp}.${ext}`;
+}
+
+function buildReportJSON() {
+  return JSON.stringify(
+    { summary: LAST_RUN.summary, results: LAST_RUN.results }, null, 2
+  );
+}
+
+function buildReportMarkdown() {
+  const s = LAST_RUN.summary || {};
+  const rows = LAST_RUN.results || [];
+  const total = rows.length;
+  const passed = rows.filter((r) => r.passed).length;
+  const lines = [];
+  lines.push(`# LLMQA evaluation report`);
+  lines.push("");
+  lines.push(`- **Provider/model:** ${s.provider}/${s.model}`);
+  lines.push(`- **Pass rate:** ${passed}/${total} (${Math.round((s.pass_rate || 0) * 100)}%)`);
+  lines.push(`- **Avg score:** ${(s.avg_score || 0).toFixed(2)}`);
+  lines.push(`- **Total cost:** $${(s.total_cost_usd || 0).toFixed(4)}`);
+  lines.push(`- **Generated:** ${new Date().toISOString()}`);
+  lines.push("");
+  lines.push(`| Case | Result | Latency | ${METRIC_ORDER.join(" | ")} |`);
+  lines.push(`|---|---|---|${METRIC_ORDER.map(() => "---").join("|")}|`);
+  rows.forEach((r) => {
+    const cells = METRIC_ORDER.map((name) => {
+      const m = (r.metrics || []).find((x) => x.metric === name);
+      return m ? m.score.toFixed(2) : "\u2014";
+    });
+    const ms = r.latency_ms != null ? `${r.latency_ms} ms` : "\u2014";
+    lines.push(`| ${r.case_id} | ${r.passed ? "PASS" : "FAIL"} | ${ms} | ${cells.join(" | ")} |`);
+  });
+  lines.push("");
+  return lines.join("\n");
+}
+
+function downloadFile(filename, text, mime) {
+  const blob = new Blob([text], { type: mime + ";charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// =====================================================================
+// Dataset peek — what's actually being graded, and what gates each case
+// =====================================================================
+function initDatasetPeek() {
+  const list = $("#peek-list");
+  const count = $("#peek-count");
+  if (!list) return;
+  const cases = Object.values(CASE_MAP);
+  if (count) count.textContent = `(${cases.length} cases)`;
+  list.innerHTML = cases.map((c) => {
+    const tags = (c.tags || []).map((t) => `<span class="tag">${t}</span>`).join("");
+    const gates = (c.gate_metrics && c.gate_metrics.length)
+      ? c.gate_metrics.map((g) => `<code>${g}</code>`).join(" ")
+      : `<span class="peek-allgate">all metrics</span>`;
+    return `<div class="peek-item">
+      <div class="peek-head"><span class="peek-id">${c.id}</span>${tags}</div>
+      <div class="peek-in">${esc(c.input || "")}</div>
+      <div class="peek-gate">gated on: ${gates}</div>
+    </div>`;
+  }).join("");
+}
+
+// =====================================================================
+// History diff — drag (or click) two runs into slots and diff them
+// =====================================================================
+const SLOTS = { A: null, B: null };
+
+function initHistoryDiff() {
+  ["A", "B"].forEach((which) => {
+    const slot = document.querySelector(`#slot${which}`);
+    if (!slot) return;
+    slot.addEventListener("dragover", (e) => { e.preventDefault(); slot.classList.add("over"); });
+    slot.addEventListener("dragleave", () => slot.classList.remove("over"));
+    slot.addEventListener("drop", (e) => {
+      e.preventDefault();
+      slot.classList.remove("over");
+      const id = parseInt(e.dataTransfer.getData("text/plain"), 10);
+      if (!Number.isNaN(id)) { SLOTS[which] = id; refreshSlots(); maybeRenderDiff(); }
+    });
+  });
+  const clearBtn = $("#slotClear");
+  if (clearBtn) clearBtn.addEventListener("click", () => {
+    SLOTS.A = null; SLOTS.B = null; refreshSlots(); maybeRenderDiff();
+  });
+}
+
+function assignRunToNextSlot(id) {
+  if (SLOTS.A === null || SLOTS.A === id) SLOTS.A = id;
+  else if (SLOTS.B === null) SLOTS.B = id;
+  else SLOTS.B = id; // replace B once both full
+  refreshSlots();
+  maybeRenderDiff();
+}
+
+function refreshSlots() {
+  ["A", "B"].forEach((which) => {
+    const slot = document.querySelector(`#slot${which}`);
+    if (!slot) return;
+    const id = SLOTS[which];
+    const r = id != null ? RUN_SUMMARY[id] : null;
+    slot.classList.toggle("filled", !!r);
+    if (r) {
+      slot.innerHTML = `<span class="slot-label">Run #${r.id}</span>`
+        + `<span class="slot-meta">${r.provider}/${r.model}</span>`
+        + `<span class="slot-meta">${Math.round(r.pass_rate * 100)}% \u00b7 avg ${r.avg_score.toFixed(2)}</span>`;
+    } else {
+      slot.innerHTML = `<span class="slot-label">Run ${which}</span><span class="slot-hint">drag a run here</span>`;
+    }
+  });
+  const clearBtn = $("#slotClear");
+  if (clearBtn) clearBtn.hidden = SLOTS.A === null && SLOTS.B === null;
+  // reflect which history rows are selected
+  document.querySelectorAll("#history .hist-row").forEach((tr) => {
+    const id = parseInt(tr.dataset.runId, 10);
+    tr.classList.toggle("selected", id === SLOTS.A || id === SLOTS.B);
+  });
+}
+
+async function maybeRenderDiff() {
+  const box = $("#histDiff");
+  if (!box) return;
+  if (SLOTS.A === null || SLOTS.B === null || SLOTS.A === SLOTS.B) {
+    box.hidden = true;
+    box.innerHTML = "";
+    return;
+  }
+  box.hidden = false;
+  box.innerHTML = `<p class="hint">Loading runs \u2026</p>`;
+  try {
+    const [runA, runB] = await Promise.all([
+      api(`/api/runs/${SLOTS.A}`),
+      api(`/api/runs/${SLOTS.B}`),
+    ]);
+    renderHistDiff(runA, runB);
+  } catch (e) {
+    box.innerHTML = `<p class="hint">\u26a0 ${e.message}</p>`;
+  }
+}
+
+function renderHistDiff(runA, runB) {
+  const box = $("#histDiff");
+  const rateA = runA.pass_rate ?? passRate(runA), rateB = runB.pass_rate ?? passRate(runB);
+  const avgA = runA.avg_score ?? 0, avgB = runB.avg_score ?? 0;
+  const dRate = Math.round((rateB - rateA) * 100);
+  const dAvg = avgB - avgA;
+  const byId = (run) => {
+    const m = {};
+    (run.results || []).forEach((r) => { m[r.case_id] = r; });
+    return m;
+  };
+  const mapA = byId(runA), mapB = byId(runB);
+  const ids = [...new Set([...Object.keys(mapA), ...Object.keys(mapB)])];
+  const flips = [];
+  ids.forEach((id) => {
+    const a = mapA[id], b = mapB[id];
+    if (!a || !b) return;
+    const pa = casePassed(a), pb = casePassed(b);
+    if (pa !== pb) flips.push({ id, from: pa, to: pb });
+  });
+  const header = `<div class="diff-head">`
+    + `<span class="diff-run">#${runA.id || "A"} \u2192 #${runB.id || "B"}</span>`
+    + diffStat("pass rate", `${dRate >= 0 ? "+" : ""}${dRate} pts`, dRate)
+    + diffStat("avg score", `${dAvg >= 0 ? "+" : ""}${dAvg.toFixed(2)}`, dAvg)
+    + `</div>`;
+  let flipHtml;
+  if (!flips.length) {
+    flipHtml = `<p class="hint">No cases flipped pass/fail between these two runs.</p>`;
+  } else {
+    flipHtml = `<div class="diff-flips">` + flips.map((f) =>
+      `<div class="diff-flip ${f.to ? "gained" : "lost"}">`
+      + `<span class="badge ${f.from ? "pass" : "fail"}"><span class="glyph">${f.from ? "\u2713" : "\u2715"}</span>${f.from ? "PASS" : "FAIL"}</span>`
+      + `<span class="diff-arrow">\u2192</span>`
+      + `<span class="badge ${f.to ? "pass" : "fail"}"><span class="glyph">${f.to ? "\u2713" : "\u2715"}</span>${f.to ? "PASS" : "FAIL"}</span>`
+      + `<code class="diff-cid">${f.id}</code></div>`
+    ).join("") + `</div>`;
+  }
+  box.innerHTML = header + flipHtml;
+}
+
+function diffStat(label, value, sign) {
+  const cls = sign > 0 ? "pos" : sign < 0 ? "neg" : "neu";
+  return `<span class="diff-stat"><span class="diff-label">${label}</span>`
+    + `<span class="diff-val ${cls}">${value}</span></span>`;
+}
+
+function passRate(run) {
+  const rs = run.results || [];
+  if (!rs.length) return 0;
+  return rs.filter(casePassed).length / rs.length;
+}
+
+function casePassed(r) {
+  if (r.passed !== undefined) return r.passed;
+  return computePassed(r, new Set(r.gate_metrics || []));
+}
+
+// =====================================================================
+// 60-second guided tour
+// =====================================================================
+const TOUR = [
+  { sel: "#provider", title: "Pick a provider", body: "Choose which model runs the golden dataset. This demo ships deterministic mock providers so results are free and reproducible \u2014 no API key." },
+  { sel: "#metrics", title: "Choose your metrics", body: "Each metric scores an answer differently: exact match, similarity, an LLM judge, and a hallucination check. Toggle whichever you care about." },
+  { sel: "#runBtn", title: "Run the evaluation", body: "Cases stream back one at a time. Watch the progress bar tally passes and fails live as the run completes." },
+  { sel: "#resultsPanel", title: "Read the results", body: "The bold metric is the one that gates a case's pass/fail. Click any row to see the input, model output, and expected answer \u2014 or re-run a single case." },
+  { sel: "#comparePanel", title: "Compare providers", body: "Run two providers over the same golden cases and see exactly where they diverge, case by case." },
+  { sel: "#trend", title: "Track quality over time", body: "Every stored run feeds the trend chart. Drag any two runs into the diff slots to see exactly which cases flipped." },
+];
+let _tourIdx = 0;
+
+const TOUR_SEEN_KEY = "llmqa.tourSeen";
+
+function tourSeen() {
+  try { return localStorage.getItem(TOUR_SEEN_KEY) === "1"; } catch { return false; }
+}
+function markTourSeen() {
+  try { localStorage.setItem(TOUR_SEEN_KEY, "1"); } catch { /* private mode: no-op */ }
+}
+
+function initTour() {
+  const btn = $("#tourBtn");
+  if (btn) btn.addEventListener("click", () => startTour());
+  const next = $("#tour-next"), prev = $("#tour-prev"), skip = $("#tour-skip");
+  if (next) next.addEventListener("click", () => stepTour(1));
+  if (prev) prev.addEventListener("click", () => stepTour(-1));
+  if (skip) skip.addEventListener("click", endTour);
+  window.addEventListener("keydown", (e) => {
+    if ($("#tour").hidden) return;
+    if (e.key === "Escape") endTour();
+    else if (e.key === "ArrowRight") stepTour(1);
+    else if (e.key === "ArrowLeft") stepTour(-1);
+  });
+  // First-time visitors get the tour offered once, automatically. After they
+  // finish or skip it we set a flag so it never auto-opens again (it stays
+  // available on demand via the tour button).
+  if (!tourSeen()) setTimeout(() => { if (!tourSeen()) startTour(); }, 900);
+}
+
+function startTour() {
+  _tourIdx = 0;
+  $("#tour").hidden = false;
+  showTourStep();
+}
+
+function stepTour(dir) {
+  const nextIdx = _tourIdx + dir;
+  if (nextIdx < 0) return;
+  if (nextIdx >= TOUR.length) { endTour(); return; }
+  _tourIdx = nextIdx;
+  showTourStep();
+}
+
+function showTourStep() {
+  const step = TOUR[_tourIdx];
+  const target = document.querySelector(step.sel);
+  $("#tour-step").textContent = `Step ${_tourIdx + 1} of ${TOUR.length}`;
+  $("#tour-title").textContent = step.title;
+  $("#tour-body").textContent = step.body;
+  $("#tour-prev").disabled = _tourIdx === 0;
+  $("#tour-next").textContent = _tourIdx === TOUR.length - 1 ? "Done" : "Next";
+  const tip = $("#tip");
+  if (target && tip) {
+    target.scrollIntoView({ behavior: "smooth", block: "center" });
+    // Position after the smooth scroll settles so the ring lands correctly.
+    setTimeout(() => {
+      const rect = target.getBoundingClientRect();
+      tip.hidden = false;
+      tip.style.top = (window.scrollY + rect.top - 6) + "px";
+      tip.style.left = (window.scrollX + rect.left - 6) + "px";
+      tip.style.width = rect.width + 12 + "px";
+      tip.style.height = rect.height + 12 + "px";
+    }, 180);
+  } else if (tip) {
+    tip.hidden = true;
+  }
+}
+
+function endTour() {
+  $("#tour").hidden = true;
+  const tip = $("#tip");
+  if (tip) tip.hidden = true;
+  markTourSeen();
 }
 
 init().catch((e) => { $("#status").textContent = "Init error: " + e.message; });

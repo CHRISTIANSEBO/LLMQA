@@ -24,12 +24,12 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from ..catalog import list_datasets, resolve_dataset_name
 from ..metrics import REGISTRY, build_metric
 from ..providers import MOCK_PROVIDERS, get_provider
 from ..runner import iter_eval, load_dataset, run_eval
-from ..seed import seed_if_empty
 from ..store import get_run, list_runs, save_run
-from .security import check_provider_allowed, guard_mutation, resolve_dataset
+from .security import check_provider_allowed, guard_mutation
 
 ROOT = Path(__file__).resolve().parent
 STATIC_DIR = ROOT / "static"
@@ -40,11 +40,9 @@ DB_PATH = os.environ.get("LLMQA_DB", str(REPO_ROOT / "llmqa_runs.db"))
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    """Seed the DB with historical mock runs on first boot so the trend chart
-    is never empty for a first-time visitor."""
-    inserted = seed_if_empty(DEFAULT_DATASET, DB_PATH)
-    if inserted:
-        print(f"[llmqa] Seeded {inserted} historical runs into {DB_PATH}")
+    """No startup seeding by design: the dashboard always starts fresh so every
+    visit reflects only the runs you actually trigger — no preset/demo runs.
+    The trend chart fills in from your own runs as you go."""
     yield  # application runs here
 
 
@@ -53,6 +51,11 @@ app = FastAPI(
     description="LLM Quality Assurance — run evaluations and track quality over time.",
     version="0.2.0",
     lifespan=lifespan,
+    # The site uses /docs for its own documentation page, so move the
+    # auto-generated OpenAPI UIs out of the way.
+    docs_url="/api/docs",
+    redoc_url="/api/redoc",
+    openapi_url="/api/openapi.json",
 )
 
 # CORS is locked down by default: the dashboard frontend is served by this same
@@ -87,7 +90,10 @@ def _get_cached_provider(name: str):
     """
     provider = _PROVIDER_CACHE.get(name)
     if provider is None:
-        provider = get_provider(name, use_cache=True)
+        # Opt into a persistent, cross-restart response cache by setting
+        # LLMQA_CACHE to a file path (recommended for a self-hosted deploy
+        # using real, paid providers).
+        provider = get_provider(name, use_cache=True, cache_path=os.environ.get("LLMQA_CACHE"))
         _PROVIDER_CACHE[name] = provider
     return provider
 
@@ -98,6 +104,7 @@ class CompareRequest(BaseModel):
         default_factory=lambda: ["exact_match", "similarity", "llm_judge", "hallucination"]
     )
     tags: list[str] | None = None
+    dataset: str | None = None
 
 
 class RunRequest(BaseModel):
@@ -106,8 +113,22 @@ class RunRequest(BaseModel):
         default_factory=lambda: ["exact_match", "similarity", "llm_judge", "hallucination"]
     )
     tags: list[str] | None = None
+    case_ids: list[str] | None = None
     dataset: str | None = None
     store: bool = True
+    # Run cases in parallel (I/O-bound provider calls). Clamped server-side.
+    concurrency: int = 1
+    # Optional safety ceiling: stop the run once cost reaches this many USD.
+    max_cost_usd: float | None = None
+
+
+# Upper bound on request-supplied concurrency so a single call can't exhaust
+# the server's thread pool.
+MAX_CONCURRENCY = 16
+
+
+def _clamp_concurrency(value: int) -> int:
+    return max(1, min(int(value or 1), MAX_CONCURRENCY))
 
 
 @app.get("/api/health")
@@ -128,8 +149,8 @@ def health() -> dict:
 
 
 @app.get("/api/config")
-def config() -> dict:
-    dataset_path = DEFAULT_DATASET
+def config(dataset: str | None = None) -> dict:
+    dataset_path = resolve_dataset_name(dataset)
     cases = load_dataset(dataset_path)
 
     real_providers = []
@@ -144,7 +165,9 @@ def config() -> dict:
         "providers": list(MOCK_PROVIDERS) + real_providers,
         "all_providers": list(MOCK_PROVIDERS) + ["anthropic", "openai", "xai"],
         "metrics": list(REGISTRY),
-        "dataset": dataset_path,
+        "dataset": Path(dataset_path).name,
+        "datasets": list_datasets(),
+        "default_dataset": Path(DEFAULT_DATASET).name,
         "cases": [
             {"id": c.id, "input": c.input, "expected": c.expected,
              "tags": c.tags, "has_context": bool(c.context),
@@ -189,8 +212,13 @@ def run(req: RunRequest, request: Request) -> dict:
         else:
             metrics.append(build_metric(name))
 
-    dataset = resolve_dataset(req.dataset, DEFAULT_DATASET, DATASETS_DIR)
-    eval_run = run_eval(dataset, provider, metrics, tags=req.tags)
+    dataset = resolve_dataset_name(req.dataset)
+    eval_run = run_eval(
+        dataset, provider, metrics,
+        tags=req.tags, case_ids=req.case_ids,
+        concurrency=_clamp_concurrency(req.concurrency),
+        max_cost_usd=req.max_cost_usd,
+    )
 
     run_id = save_run(eval_run, DB_PATH) if req.store else None
 
@@ -199,6 +227,8 @@ def run(req: RunRequest, request: Request) -> dict:
     payload["avg_score"] = eval_run.avg_score
     payload["score_by_metric"] = eval_run.score_by_metric()
     payload["run_id"] = run_id
+    payload["stopped_early"] = eval_run.stopped_early
+    payload["stopped_reason"] = eval_run.stopped_reason
     # `passed` is a computed property, so inject it per case for the frontend.
     for case_payload, case_result in zip(payload["results"], eval_run.results, strict=False):
         case_payload["passed"] = case_result.passed
@@ -228,13 +258,17 @@ def run_stream(req: RunRequest, request: Request):
         else:
             metrics.append(build_metric(name))
 
-    dataset_path = resolve_dataset(req.dataset, DEFAULT_DATASET, DATASETS_DIR)
+    dataset_path = resolve_dataset_name(req.dataset)
     store = req.store
+
+    conc = _clamp_concurrency(req.concurrency)
 
     def _event_gen():
         run = None
-        for run, cr in iter_eval(dataset_path, provider, metrics, req.tags):  # noqa: B007 - keep last run
-
+        for run, cr in iter_eval(  # noqa: B007 - keep last run
+            dataset_path, provider, metrics, req.tags, req.case_ids,
+            concurrency=conc, max_cost_usd=req.max_cost_usd,
+        ):
             case_data = cr.model_dump()
             case_data["passed"] = cr.passed
             yield f"data: {_json.dumps({'type': 'case', 'result': case_data})}\n\n"
@@ -248,6 +282,8 @@ def run_stream(req: RunRequest, request: Request):
             "model": provider.model,
             "provider": provider.name,
             "run_id": run_id,
+            "stopped_early": run.stopped_early if run else False,
+            "stopped_reason": run.stopped_reason if run else "",
         }
         yield f"data: {_json.dumps(summary)}\n\n"
 
@@ -281,7 +317,7 @@ def compare(req: CompareRequest, request: Request) -> dict:
             else:
                 metrics.append(build_metric(name))
 
-        eval_run = run_eval(DEFAULT_DATASET, provider, metrics, tags=req.tags)
+        eval_run = run_eval(resolve_dataset_name(req.dataset), provider, metrics, tags=req.tags)
 
         payload = eval_run.model_dump()
         payload["pass_rate"] = eval_run.pass_rate
@@ -295,16 +331,42 @@ def compare(req: CompareRequest, request: Request) -> dict:
 
 
 # --- Static frontend (mounted last so /api routes take precedence) ----------
+# Multi-page site: each route maps to its own HTML document. Clean URLs
+# (e.g. /dashboard) serve the matching <name>.html so links stay pretty.
+PAGES = {
+    "/": "index.html",
+    "/dashboard": "dashboard.html",
+    "/docs": "docs.html",
+    "/about": "about.html",
+}
+
 if STATIC_DIR.exists():
     app.mount("/assets", StaticFiles(directory=STATIC_DIR / "assets"), name="assets")
 
+    def _page(name: str) -> FileResponse:
+        return FileResponse(STATIC_DIR / name)
+
     @app.get("/")
     def index() -> FileResponse:
-        return FileResponse(STATIC_DIR / "index.html")
+        return _page("index.html")
+
+    @app.get("/dashboard")
+    def dashboard() -> FileResponse:
+        return _page("dashboard.html")
+
+    @app.get("/docs")
+    def docs() -> FileResponse:
+        return _page("docs.html")
+
+    @app.get("/about")
+    def about() -> FileResponse:
+        return _page("about.html")
 
     @app.exception_handler(404)
-    async def spa_fallback(request, exc):  # noqa: ANN001
-        # SPA fallback: non-API 404s serve index.html so client routing works.
+    async def not_found(request, exc):  # noqa: ANN001
+        # API 404s stay JSON. For a bare clean-URL that matches a known page
+        # (e.g. a trailing-slash variant), serve it; otherwise fall back to home.
         if request.url.path.startswith("/api"):
             return JSONResponse({"detail": "Not Found"}, status_code=404)
-        return FileResponse(STATIC_DIR / "index.html")
+        page = PAGES.get(request.url.path.rstrip("/") or "/")
+        return FileResponse(STATIC_DIR / (page or "index.html"))

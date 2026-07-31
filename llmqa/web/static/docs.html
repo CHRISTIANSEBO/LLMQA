@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Docs — LLMQA</title>
+<meta name="description" content="LLMQA documentation: install, quickstart, metrics, quality gates, regression detection, and CI integration." />
+<script>
+  /* Set the theme before paint to avoid a flash of the wrong palette.
+     Only an explicit stored choice is applied here; otherwise CSS follows the
+     OS via prefers-color-scheme. */
+  (function () {
+    try {
+      var t = localStorage.getItem("llmqa-theme");
+      if (t === "light" || t === "dark")
+        document.documentElement.setAttribute("data-theme", t);
+    } catch (e) {}
+  })();
+</script>
+<link rel="stylesheet" href="/assets/app.css" />
+<link rel="icon" type="image/svg+xml" href="/assets/favicon.svg" />
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="topbar">
+  <a class="brand" href="/">
+    <img class="brand-logo brand-logo--light" src="/assets/logo-light.svg" alt="" width="40" height="40" aria-hidden="true" />
+    <img class="brand-logo brand-logo--dark" src="/assets/logo-dark.svg" alt="" width="40" height="40" aria-hidden="true" />
+    <div>
+      <h1>LLMQA</h1>
+      <p class="tagline">LLM Quality Assurance — evaluate models like software you can test</p>
+    </div>
+  </a>
+  <nav class="topnav" aria-label="primary">
+    <a href="/">Home</a>
+    <a href="/dashboard">Dashboard</a>
+    <a href="/docs" aria-current="page">Docs</a>
+    <a href="/about">About</a>
+    <button type="button" id="theme-toggle" class="theme-toggle" aria-label="Switch to dark theme" title="Switch to dark theme" aria-pressed="false"><span class="tt-glyph" aria-hidden="true">☀</span></button>
+    <a class="gh-star" href="https://github.com/CHRISTIANSEBO/LLMQA" target="_blank" rel="noopener" aria-label="Star LLMQA on GitHub">★ Star on GitHub</a>
+  </nav>
+</header>
+
+<main id="main" class="docs-layout">
+  <aside class="docs-nav" aria-label="docs sections">
+    <p class="docs-nav-title">On this page</p>
+    <ul>
+      <li><a href="#install">Install</a></li>
+      <li><a href="#quickstart">Quickstart</a></li>
+      <li><a href="#dataset">Golden dataset</a></li>
+      <li><a href="#metrics">Metrics</a></li>
+      <li><a href="#gates">Quality gates</a></li>
+      <li><a href="#regression">Regression detection</a></li>
+      <li><a href="#ci">CI integration</a></li>
+      <li><a href="#api">HTTP API</a></li>
+    </ul>
+  </aside>
+
+  <div class="docs-body">
+    <section class="page-head">
+      <p class="edition">Documentation · v0.2</p>
+      <h2 class="page-title">Docs</h2>
+      <p class="page-sub">Everything you need to run LLMQA locally, in CI, or as a
+        hosted dashboard. For the full reference, see the
+        <a href="https://github.com/CHRISTIANSEBO/LLMQA#readme" target="_blank" rel="noopener">README on GitHub</a>.</p>
+    </section>
+
+    <section class="panel doc-section" id="install">
+      <h2>Install</h2>
+      <p>LLMQA requires Python 3.11+. Install from source:</p>
+      <pre class="code"><code>git clone https://github.com/CHRISTIANSEBO/LLMQA.git
+cd LLMQA
+pip install -e ".[all]"</code></pre>
+      <p class="hint">Extras: <code>[providers]</code> for live-model SDKs,
+        <code>[web]</code> for the dashboard, <code>[dev]</code> for tests,
+        <code>[all]</code> for everything. Core install needs no API key.</p>
+    </section>
+
+    <section class="panel doc-section" id="quickstart">
+      <h2>Quickstart</h2>
+      <p>Run the built-in golden dataset through the deterministic mock provider —
+        no API key needed:</p>
+      <pre class="code"><code>llmqa run --provider mock-strong</code></pre>
+      <p>You'll get a per-case pass/fail table with the gating metric highlighted,
+        plus an aggregate pass rate, average score, latency, and cost.</p>
+    </section>
+
+    <section class="panel doc-section" id="dataset">
+      <h2>Golden dataset</h2>
+      <p>A dataset is a YAML list of test cases. Each case declares its input,
+        expected answer, tags, optional grounding context, and which metric(s)
+        gate its pass/fail decision:</p>
+      <pre class="code"><code>- id: capital-france
+  input: "What is the capital of France?"
+  expected: "Paris"
+  tags: [factual]
+  gate_metrics: [exact_match]
+
+- id: summarize-release
+  input: "Summarize the release notes."
+  expected: "A concise summary of the key changes."
+  context: "v2.0 adds dark mode and fixes the export bug."
+  tags: [summarization, rag]
+  gate_metrics: [llm_judge, hallucination]</code></pre>
+      <p class="hint">Per-case <code>gate_metrics</code> is why a verbose-but-correct
+        answer can still pass: a summary is gated on the judge, not on exact string
+        match.</p>
+    </section>
+
+    <section class="panel doc-section" id="metrics">
+      <h2>Metrics</h2>
+      <ul class="doc-list">
+        <li><strong>exact_match</strong> — normalized string / JSON structural equality. Strict; good for factual and structured cases.</li>
+        <li><strong>similarity</strong> — token-overlap (Jaccard) similarity; swappable for embeddings. Passes at a low threshold by design.</li>
+        <li><strong>llm_judge</strong> — LLM-as-judge with discrete grades and chain-of-thought; a heuristic fallback runs on the mock provider.</li>
+        <li><strong>hallucination</strong> — grounding check for cases with context; rewards correct refusals, and is N/A when there's no context.</li>
+      </ul>
+    </section>
+
+    <section class="panel doc-section" id="gates">
+      <h2>Quality gates</h2>
+      <p>Fail the build when the pass rate drops below a threshold. The command
+        returns a non-zero exit code so CI actually stops:</p>
+      <pre class="code"><code>llmqa run --provider mock-legacy --min-pass-rate 0.8
+# ❌ GATE FAILED: pass rate 50% < required 80%   (exit 1)</code></pre>
+    </section>
+
+    <section class="panel doc-section" id="regression">
+      <h2>Regression detection</h2>
+      <p>Store a baseline, then fail if a later run's average score drops beyond
+        your tolerance:</p>
+      <pre class="code"><code>llmqa run --provider mock-strong           # stores a baseline
+llmqa run --provider mock-legacy --regression --regression-tolerance 0.05
+# ❌ REGRESSION: avg score dropped 0.52 (1.00 → 0.48)   (exit 1)</code></pre>
+    </section>
+
+    <section class="panel doc-section" id="ci">
+      <h2>CI integration</h2>
+      <p>Drop the gate into any pipeline. Example GitHub Actions step:</p>
+      <pre class="code"><code>- name: LLM quality gate
+  run: |
+    pip install -e ".[all]"
+    llmqa run --provider mock-strong --min-pass-rate 0.9</code></pre>
+      <p class="hint">Because the mock providers are deterministic and free, the
+        full gate runs in CI with no API key and no cost.</p>
+    </section>
+
+    <section class="panel doc-section" id="api">
+      <h2>HTTP API</h2>
+      <p>The dashboard is backed by a small FastAPI service. Key endpoints:</p>
+      <ul class="doc-list">
+        <li><code>GET /api/health</code> — liveness + which providers are usable</li>
+        <li><code>GET /api/config</code> — providers, metrics, and dataset cases</li>
+        <li><code>GET /api/history</code> — recent runs (summary rows)</li>
+        <li><code>GET /api/runs/{id}</code> — one run with per-case detail</li>
+        <li><code>POST /api/run</code> — execute an evaluation and persist it</li>
+        <li><code>POST /api/run/stream</code> — stream per-case results via SSE</li>
+        <li><code>POST /api/compare</code> — run multiple providers side-by-side</li>
+      </ul>
+    </section>
+  </div>
+</main>
+
+<footer>LLMQA v0.2 · open-source LLM evaluation harness · MIT licensed · maintained by <a href="https://github.com/CHRISTIANSEBO" target="_blank" rel="noopener">@CHRISTIANSEBO</a></footer>
+<script src="/assets/theme.js"></script>
+</body>
+</html>

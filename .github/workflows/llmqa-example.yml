@@ -1,0 +1,42 @@
+# TEMPLATE: gate a pull request on LLM quality using the LLMQA action.
+# Copy this into your own repo's .github/workflows/ and point `dataset` at your
+# golden set. Real providers read their key from a repo secret; the mock
+# provider needs no key and keeps CI free and deterministic.
+#
+# In this repo it is manual-only (workflow_dispatch) so it doesn't gate LLMQA's
+# own PRs. In YOUR repo, uncomment the pull_request trigger below.
+name: llmqa-gate-example
+
+on:
+  workflow_dispatch: {}
+  # pull_request:
+  #   branches: [main]
+
+permissions:
+  contents: read
+  checks: write
+
+jobs:
+  quality-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: LLMQA quality gate
+        id: llmqa
+        uses: CHRISTIANSEBO/LLMQA@main
+        with:
+          provider: mock            # swap for openai/anthropic/xai on self-hosted runners
+          dataset: qa_golden.yaml   # or a path to your own dataset in this repo
+          min-pass-rate: "0.8"
+          concurrency: "4"
+          junit-path: llmqa-results.xml
+        # For a real provider, expose the key:
+        # env:
+        #   OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+
+      - name: Publish test report
+        if: always()
+        uses: mikepenz/action-junit-report@v5
+        with:
+          report_paths: ${{ steps.llmqa.outputs.junit-path }}

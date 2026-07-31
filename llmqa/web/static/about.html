@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>About — LLMQA</title>
+<meta name="description" content="About LLMQA — an open-source, MIT-licensed LLM evaluation harness. Why it exists, how to contribute, and where to find the project." />
+<script>
+  /* Set the theme before paint to avoid a flash of the wrong palette.
+     Only an explicit stored choice is applied here; otherwise CSS follows the
+     OS via prefers-color-scheme. */
+  (function () {
+    try {
+      var t = localStorage.getItem("llmqa-theme");
+      if (t === "light" || t === "dark")
+        document.documentElement.setAttribute("data-theme", t);
+    } catch (e) {}
+  })();
+</script>
+<link rel="stylesheet" href="/assets/app.css" />
+<link rel="icon" type="image/svg+xml" href="/assets/favicon.svg" />
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="topbar">
+  <a class="brand" href="/">
+    <img class="brand-logo brand-logo--light" src="/assets/logo-light.svg" alt="" width="40" height="40" aria-hidden="true" />
+    <img class="brand-logo brand-logo--dark" src="/assets/logo-dark.svg" alt="" width="40" height="40" aria-hidden="true" />
+    <div>
+      <h1>LLMQA</h1>
+      <p class="tagline">LLM Quality Assurance — evaluate models like software you can test</p>
+    </div>
+  </a>
+  <nav class="topnav" aria-label="primary">
+    <a href="/">Home</a>
+    <a href="/dashboard">Dashboard</a>
+    <a href="/docs">Docs</a>
+    <a href="/about" aria-current="page">About</a>
+    <button type="button" id="theme-toggle" class="theme-toggle" aria-label="Switch to dark theme" title="Switch to dark theme" aria-pressed="false"><span class="tt-glyph" aria-hidden="true">☀</span></button>
+    <a class="gh-star" href="https://github.com/CHRISTIANSEBO/LLMQA" target="_blank" rel="noopener" aria-label="Star LLMQA on GitHub">★ Star on GitHub</a>
+  </nav>
+</header>
+
+<main id="main">
+  <section class="page-head">
+    <p class="edition">Open source · MIT licensed</p>
+    <h2 class="page-title">About LLMQA</h2>
+    <p class="page-sub">LLMQA treats LLM quality the way engineering treats
+      software quality: measurable, versioned, and gated. It exists so a model
+      or prompt change can't silently degrade what you ship.</p>
+  </section>
+
+  <section class="panel">
+    <h2>Why it exists</h2>
+    <p class="prose">Shipping with LLMs means quality is a moving target — a new
+      model version, a reworded prompt, or a fresh temperature setting can quietly
+      break behavior that used to work. LLMQA makes that regression <em>visible and
+      blockable</em>: define a golden dataset once, score every change against it,
+      and fail CI when quality drops. It's the automated version of the kind of
+      manual, case-by-case model evaluation that otherwise doesn't scale.</p>
+  </section>
+
+  <section class="panel">
+    <h2>Design principles</h2>
+    <ul class="doc-list">
+      <li><strong>Free by default.</strong> Deterministic mock providers mean the full test suite and CI gates run without any API key or cost.</li>
+      <li><strong>Provider-agnostic.</strong> Bring your own Anthropic, OpenAI, or xAI key for live evals — the harness doesn't care which model you test.</li>
+      <li><strong>Reviewable.</strong> Every result is a readable table: per-case pass/fail, gating metric, latency, and cost.</li>
+      <li><strong>CI-first.</strong> Quality gates and regression checks return real exit codes, so they actually stop a bad build.</li>
+    </ul>
+  </section>
+
+  <section class="panel colophon" id="contribute">
+    <h2>Open source &amp; contributing</h2>
+    <p>LLMQA is MIT-licensed and built in the open. Issues, ideas, and pull
+      requests are welcome — new metrics, new providers, more golden-dataset
+      cases, or docs. The deterministic <code>mock</code> providers mean the full
+      test suite and CI gates run for free, without any API key.</p>
+    <ul class="colophon-links">
+      <li><a href="https://github.com/CHRISTIANSEBO/LLMQA" target="_blank" rel="noopener">Repository</a></li>
+      <li><a href="https://github.com/CHRISTIANSEBO/LLMQA/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">Contributing guide</a></li>
+      <li><a href="https://github.com/CHRISTIANSEBO/LLMQA/blob/main/CODE_OF_CONDUCT.md" target="_blank" rel="noopener">Code of conduct</a></li>
+      <li><a href="https://github.com/CHRISTIANSEBO/LLMQA/discussions" target="_blank" rel="noopener">Discussions</a></li>
+      <li><a href="https://github.com/CHRISTIANSEBO/LLMQA/blob/main/SECURITY.md" target="_blank" rel="noopener">Security policy</a></li>
+      <li><a href="https://github.com/CHRISTIANSEBO/LLMQA/blob/main/LICENSE" target="_blank" rel="noopener">MIT license</a></li>
+    </ul>
+  </section>
+</main>
+
+<footer>LLMQA v0.2 · open-source LLM evaluation harness · MIT licensed · maintained by <a href="https://github.com/CHRISTIANSEBO" target="_blank" rel="noopener">@CHRISTIANSEBO</a></footer>
+<script src="/assets/theme.js"></script>
+</body>
+</html>

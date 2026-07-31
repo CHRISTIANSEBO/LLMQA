@@ -63,7 +63,7 @@ def test_cli_gate_fails_on_tag_and_latency():
         min_metric_score=None,
         max_avg_latency_ms=100,   # avg is 200 -> fail
         max_p95_latency_ms=None,
-        max_cost=None,
+        max_cost_budget=None,
         regression_tolerance=0.05,
     )
     code = _evaluate_gates(_run(), args, baseline=None)
@@ -81,7 +81,7 @@ def test_cli_gate_passes_when_thresholds_met():
         min_metric_score=None,
         max_avg_latency_ms=1000,
         max_p95_latency_ms=1000,
-        max_cost=1.0,
+        max_cost_budget=1.0,
         regression_tolerance=0.05,
     )
     code = _evaluate_gates(_run(), args, baseline=None)

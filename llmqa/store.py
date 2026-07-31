@@ -29,7 +29,9 @@ def _connect(db_path: str | Path) -> sqlite3.Connection:
             avg_score  REAL NOT NULL,
             cost_usd   REAL NOT NULL,
             n_cases    INTEGER NOT NULL,
-            results_json TEXT
+            results_json TEXT,
+            dataset_hash TEXT,
+            label TEXT
         )
         """
     )
@@ -37,6 +39,8 @@ def _connect(db_path: str | Path) -> sqlite3.Connection:
     cols = {r[1] for r in conn.execute("PRAGMA table_info(runs)").fetchall()}
     if "results_json" not in cols:
         conn.execute("ALTER TABLE runs ADD COLUMN results_json TEXT")
+    if "dataset_hash" not in cols:
+        conn.execute("ALTER TABLE runs ADD COLUMN dataset_hash TEXT")
     if "label" not in cols:
         # Named baseline tag, e.g. "baseline" or "release-1.2", for pinned
         # regression comparisons instead of always comparing to the last run.
@@ -50,7 +54,8 @@ def save_run(run: EvalRun, db_path: str | Path = DEFAULT_DB, label: str | None =
     try:
         cur = conn.execute(
             "INSERT INTO runs (timestamp, provider, model, dataset, pass_rate, avg_score,"
-            " cost_usd, n_cases, results_json, label) VALUES (?,?,?,?,?,?,?,?,?,?)",
+            " cost_usd, n_cases, results_json, dataset_hash, label)"
+            " VALUES (?,?,?,?,?,?,?,?,?,?,?)",
             (
                 run.timestamp,
                 run.provider,
@@ -61,6 +66,7 @@ def save_run(run: EvalRun, db_path: str | Path = DEFAULT_DB, label: str | None =
                 run.total_cost_usd,
                 len(run.results),
                 run.model_dump_json(),
+                run.dataset_hash,
                 label,
             ),
         )
@@ -108,14 +114,14 @@ def list_runs(db_path: str | Path = DEFAULT_DB, limit: int = 50) -> list[dict]:
     conn = _connect(db_path)
     try:
         rows = conn.execute(
-            "SELECT id, timestamp, provider, model, dataset, pass_rate, avg_score, cost_usd, n_cases, label"
-            " FROM runs ORDER BY id DESC LIMIT ?",
+            "SELECT id, timestamp, provider, model, dataset, pass_rate, avg_score, cost_usd,"
+            " n_cases, dataset_hash, label FROM runs ORDER BY id DESC LIMIT ?",
             (limit,),
         ).fetchall()
     finally:
         conn.close()
     keys = ["id", "timestamp", "provider", "model", "dataset",
-            "pass_rate", "avg_score", "cost_usd", "n_cases", "label"]
+            "pass_rate", "avg_score", "cost_usd", "n_cases", "dataset_hash", "label"]
     return [dict(zip(keys, r, strict=False)) for r in rows]
 
 
@@ -127,7 +133,7 @@ def get_run(run_id: int, db_path: str | Path = DEFAULT_DB) -> dict | None:
     try:
         row = conn.execute(
             "SELECT id, timestamp, provider, model, dataset, pass_rate, avg_score,"
-            " cost_usd, n_cases, results_json, label FROM runs WHERE id = ?",
+            " cost_usd, n_cases, results_json, dataset_hash, label FROM runs WHERE id = ?",
             (run_id,),
         ).fetchone()
     finally:
@@ -138,6 +144,6 @@ def get_run(run_id: int, db_path: str | Path = DEFAULT_DB) -> dict | None:
     return {
         "id": row[0], "timestamp": row[1], "provider": row[2], "model": row[3],
         "dataset": row[4], "pass_rate": row[5], "avg_score": row[6],
-        "cost_usd": row[7], "n_cases": row[8], "detail": detail,
-        "label": row[10] if len(row) > 10 else None,
+        "cost_usd": row[7], "n_cases": row[8], "dataset_hash": row[10],
+        "label": row[11] if len(row) > 11 else None, "detail": detail,
     }
