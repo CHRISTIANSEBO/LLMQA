@@ -1,12 +1,12 @@
 """Pluggable model providers. Select by name via get_provider()."""
 from __future__ import annotations
 
-from .base import Provider, ModelResponse, ProviderError
+from .base import ModelResponse, Provider, ProviderError
 from .mock import (
+    MockLegacyProvider,
+    MockLiteProvider,
     MockProvider,
     MockStrongProvider,
-    MockLiteProvider,
-    MockLegacyProvider,
 )
 
 # Key-free mock tiers, selectable by name. `mock` aliases the strong baseline.

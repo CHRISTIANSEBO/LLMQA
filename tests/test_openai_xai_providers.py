@@ -40,14 +40,16 @@ class _FakeCompletion:
 
 
 class _FakeCompletions:
-    def __init__(self, client: "_FakeClient") -> None:
+    def __init__(self, client: _FakeClient) -> None:
         self._client = client
 
-    def create(self, *, model, max_tokens, messages):
+    def create(self, *, model, max_tokens, messages, temperature=None, seed=None):
         self._client.last_call = {
             "model": model,
             "max_tokens": max_tokens,
             "messages": messages,
+            "temperature": temperature,
+            "seed": seed,
         }
         return _FakeCompletion(
             "  Paris  ", _FakeUsage(prompt_tokens=1000, completion_tokens=500)
@@ -55,9 +57,10 @@ class _FakeCompletions:
 
 
 class _FakeClient:
-    def __init__(self, api_key=None, base_url=None) -> None:
+    def __init__(self, api_key=None, base_url=None, timeout=None) -> None:
         self.api_key = api_key
         self.base_url = base_url
+        self.timeout = timeout
         self.last_call = None
         self.chat = types.SimpleNamespace(completions=_FakeCompletions(self))
 
@@ -68,8 +71,8 @@ def fake_openai(monkeypatch):
     fake_mod = types.ModuleType("openai")
     created = {}
 
-    def _factory(api_key=None, base_url=None):
-        client = _FakeClient(api_key=api_key, base_url=base_url)
+    def _factory(api_key=None, base_url=None, timeout=None):
+        client = _FakeClient(api_key=api_key, base_url=base_url, timeout=timeout)
         created["client"] = client
         return client
 
@@ -86,6 +89,9 @@ def test_openai_generates_text_and_cost(monkeypatch, fake_openai):
     assert resp.text == "Paris"  # stripped
     # gpt-4o-mini: 0.15/1M in, 0.60/1M out -> 1000*0.15/1e6 + 500*0.60/1e6
     assert resp.cost_usd == pytest.approx(0.00015 + 0.00030)
+    # Determinism: temperature pinned to 0 and a fixed seed are sent.
+    assert fake_openai["client"].last_call["temperature"] == 0.0
+    assert fake_openai["client"].last_call["seed"] == 42
     # Default OpenAI base URL is the SDK default (None passed through).
     assert fake_openai["client"].base_url is None
     assert fake_openai["client"].api_key == "sk-test"

@@ -6,7 +6,7 @@ import pytest
 from llmqa.metrics import build_metric
 from llmqa.providers import get_provider
 from llmqa.providers.base import Provider, ProviderError
-from llmqa.runner import run_eval, iter_eval, load_dataset
+from llmqa.runner import run_eval
 
 DATASET = str(Path(__file__).resolve().parent.parent / "datasets" / "qa_golden.yaml")
 

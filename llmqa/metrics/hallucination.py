@@ -9,9 +9,9 @@ from __future__ import annotations
 
 import re
 
-from .base import Metric
+from ..providers import MockProvider, Provider
 from ..types import MetricResult, TestCase
-from ..providers import Provider, MockProvider
+from .base import Metric
 
 _WORD = re.compile(r"[a-z0-9]+")
 

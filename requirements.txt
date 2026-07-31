@@ -1,9 +1,11 @@
 # Core runtime + web dashboard (what the deployed service needs).
-pydantic>=2.6.0
-PyYAML>=6.0
-fastapi>=0.110.0
-uvicorn[standard]>=0.29.0
+# Pinned with upper bounds so a new major release can't silently break a build
+# (reproducibility matters for a QA harness). Bump deliberately.
+pydantic>=2.6.0,<3.0
+PyYAML>=6.0,<7.0
+fastapi>=0.110.0,<1.0
+uvicorn[standard]>=0.29.0,<1.0
+python-dotenv>=1.0.0,<2.0
 # Optional live providers (mock runs / CI don't need a key):
-anthropic>=0.40.0
-openai>=1.0.0
-python-dotenv>=1.0.0
+anthropic>=0.40.0,<1.0
+openai>=1.0.0,<3.0

@@ -18,6 +18,7 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Software Development :: Testing",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
@@ -55,6 +56,8 @@ all = [
 [project.urls]
 Homepage = "https://github.com/CHRISTIANSEBO/LLMQA"
 Repository = "https://github.com/CHRISTIANSEBO/LLMQA"
+Changelog = "https://github.com/CHRISTIANSEBO/LLMQA/blob/main/CHANGELOG.md"
+Issues = "https://github.com/CHRISTIANSEBO/LLMQA/issues"
 "Live demo" = "https://llmqa-production.up.railway.app/"
 
 [project.scripts]
@@ -83,4 +86,34 @@ include = [
     "/tests",
     "/README.md",
     "/LICENSE",
+    "/CHANGELOG.md",
 ]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+# A pragmatic, non-noisy default: pyflakes (F), pycodestyle errors (E),
+# import sorting (I), bugbear (B), and pyupgrade (UP).
+select = ["E", "F", "I", "B", "UP"]
+# Long lines are handled case-by-case; keep the harness readable.
+ignore = ["E501", "B008"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B011"]
+# cli.py and server.py deliberately call load_dotenv() before importing modules
+# that read env at import time, so their imports aren't at the very top.
+"cli.py" = ["E402"]
+"server.py" = ["E402"]
+
+# pytest is configured in pytest.ini (it defines python_classes + pythonpath).
+
+[tool.coverage.run]
+source = ["llmqa", "cli"]
+omit = ["tests/*", ".venv/*"]
+
+[tool.coverage.report]
+# CI fails if coverage drops below this. Raise over time.
+fail_under = 80
+show_missing = true

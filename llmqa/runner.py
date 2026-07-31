@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from collections.abc import Generator
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import yaml
@@ -24,17 +24,30 @@ def _eval_case(case: TestCase, provider: Provider, metrics: list[Metric]) -> tup
 
     Pure per-case work with no shared mutation, so it is safe to run in a
     worker thread. The caller accumulates cost/results in the main thread.
+
+    A provider failure (after its own retries) is degraded to a failed case
+    with an empty output and a recorded ``error`` rather than aborting the
+    whole run, so one flaky call can't lose an entire evaluation.
     """
-    resp = provider.generate(case.input, case.context)
+    error: str | None = None
+    try:
+        resp = provider.generate(case.input, case.context)
+        text, cost, latency = resp.text, resp.cost_usd, resp.latency_ms
+    except Exception as exc:  # noqa: BLE001 - degrade gracefully, don't abort the run
+        error = f"{type(exc).__name__}: {exc}"
+        text, cost, latency = "", 0.0, 0.0
+
     cr = CaseResult(
         case_id=case.id,
         tags=case.tags,
         gate_metrics=case.gate_metrics,
-        output=resp.text,
-        latency_ms=round(resp.latency_ms, 1),
-        metrics=[m.score(case, resp.text) for m in metrics],
+        output=text,
+        latency_ms=round(latency, 1),
+        cost_usd=round(cost, 6),
+        error=error,
+        metrics=[m.score(case, text) for m in metrics],
     )
-    return cr, resp.cost_usd
+    return cr, cost
 
 
 def iter_eval(
@@ -80,7 +93,7 @@ def iter_eval(
         dataset_hash=dataset_hash(dataset_path),
         model=provider.model,
         provider=provider.name,
-        timestamp=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        timestamp=datetime.now(UTC).isoformat(timespec="seconds"),
     )
 
     def _record(cr: CaseResult, cost: float) -> bool:
@@ -130,7 +143,7 @@ def run_eval(
 ) -> EvalRun:
     """Run every case and return the completed EvalRun. Thin wrapper over iter_eval."""
     run = None
-    for run, _ in iter_eval(
+    for run, _ in iter_eval(  # noqa: B007 - keep last run
         dataset_path, provider, metrics, tags, case_ids,
         concurrency=concurrency, max_cost_usd=max_cost_usd,
     ):
@@ -140,6 +153,6 @@ def run_eval(
             dataset=str(dataset_path),
             model=provider.model,
             provider=provider.name,
-            timestamp=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            timestamp=datetime.now(UTC).isoformat(timespec="seconds"),
         )
     return run

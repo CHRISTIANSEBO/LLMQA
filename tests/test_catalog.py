@@ -1,6 +1,5 @@
 """Tests for the dataset catalog (discovery, safe resolution, versioning) and
 that runs record a dataset hash."""
-from pathlib import Path
 
 from fastapi.testclient import TestClient
 
@@ -14,7 +13,7 @@ from llmqa.catalog import (
 from llmqa.metrics import build_metric
 from llmqa.providers import get_provider
 from llmqa.runner import run_eval
-from llmqa.store import save_run, get_run
+from llmqa.store import get_run, save_run
 from llmqa.web.app import app
 
 client = TestClient(app)

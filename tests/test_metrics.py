@@ -1,5 +1,5 @@
 """Unit tests for the scoring metrics."""
-from llmqa.metrics import ExactMatchMetric, SimilarityMetric, HallucinationMetric, LLMJudgeMetric
+from llmqa.metrics import ExactMatchMetric, HallucinationMetric, LLMJudgeMetric, SimilarityMetric
 from llmqa.types import TestCase
 
 

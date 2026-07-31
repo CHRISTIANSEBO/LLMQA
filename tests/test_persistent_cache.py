@@ -1,7 +1,7 @@
 """Tests for the SQLite-backed persistent response cache."""
 from __future__ import annotations
 
-from llmqa.cache import SqliteCache, MemoryCache, cache_key, build_cache
+from llmqa.cache import MemoryCache, SqliteCache, build_cache, cache_key
 from llmqa.providers import get_provider
 from llmqa.providers.base import Provider
 

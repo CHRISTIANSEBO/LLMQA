@@ -47,6 +47,11 @@ class OpenAIProvider(Provider):
     _api_key_env = "OPENAI_API_KEY"
     _base_url: str | None = None  # None => SDK default (api.openai.com)
     _max_tokens = 512
+    # Determinism: a QA harness must be as reproducible as possible, so we pin
+    # temperature to 0 and pass a fixed seed. Env-overridable for experiments.
+    _temperature = 0.0
+    _seed = 42
+    _timeout_s = 30.0
 
     def __init__(self, model: str | None = None, *, use_cache: bool = True) -> None:
         super().__init__(use_cache=use_cache)
@@ -58,7 +63,11 @@ class OpenAIProvider(Provider):
         import openai  # imported lazily so 'mock' runs without the dep
 
         self.model = model or self._default_model
-        self._client = openai.OpenAI(api_key=api_key, base_url=self._base_url)
+        self._temperature = float(os.environ.get("LLMQA_TEMPERATURE", self._temperature))
+        self._seed = int(os.environ.get("LLMQA_SEED", self._seed))
+        self._client = openai.OpenAI(
+            api_key=api_key, base_url=self._base_url, timeout=self._timeout_s
+        )
 
     def _pricing(self) -> tuple[float, float]:
         return _price_for(self.model)
@@ -68,6 +77,8 @@ class OpenAIProvider(Provider):
         resp = self._client.chat.completions.create(
             model=self.model,
             max_tokens=self._max_tokens,
+            temperature=self._temperature,
+            seed=self._seed,
             messages=[{"role": "user", "content": content}],
         )
         text = (resp.choices[0].message.content or "").strip()

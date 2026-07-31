@@ -122,6 +122,14 @@ def test_run_mock_and_persist_and_fetch():
     assert d.json()["detail"]["results"]
 
 
+def test_real_provider_blocked_by_default():
+    # Real (paid) providers are gated off unless explicitly enabled, so an
+    # anonymous request can't burn the operator's API budget -> 403.
+    os.environ.pop("LLMQA_ALLOW_REAL_PROVIDERS", None)
+    r = client.post("/api/run", json={"provider": "anthropic"})
+    assert r.status_code == 403
+
+
 def test_run_case_ids_filter_runs_only_that_case():
     # Grab a real case id from the config, then run only that one.
     cfg = client.get("/api/config").json()
@@ -159,12 +167,14 @@ def test_run_stream_respects_case_ids():
 
 
 def test_run_anthropic_without_key_is_rejected():
-    # No key configured in the test env -> 400, not a crash.
+    # With real providers enabled but no key configured -> 400, not a crash.
     prev = os.environ.pop("ANTHROPIC_API_KEY", None)
+    os.environ["LLMQA_ALLOW_REAL_PROVIDERS"] = "1"
     try:
         r = client.post("/api/run", json={"provider": "anthropic"})
         assert r.status_code == 400
     finally:
+        os.environ.pop("LLMQA_ALLOW_REAL_PROVIDERS", None)
         if prev is not None:
             os.environ["ANTHROPIC_API_KEY"] = prev
 

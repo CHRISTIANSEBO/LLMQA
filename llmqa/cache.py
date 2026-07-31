@@ -16,7 +16,7 @@ import hashlib
 import sqlite3
 import threading
 from abc import ABC, abstractmethod
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 
@@ -94,7 +94,7 @@ class SqliteCache(CacheBackend):
         return (row[0], row[1]) if row else None
 
     def set(self, key: str, text: str, cost: float) -> None:
-        now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        now = datetime.now(UTC).isoformat(timespec="seconds")
         with self._lock:
             self._conn.execute(
                 "INSERT OR REPLACE INTO response_cache (key, text, cost, created)"

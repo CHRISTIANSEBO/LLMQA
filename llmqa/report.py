@@ -15,12 +15,14 @@ def to_console(run: EvalRun) -> str:
     for r in run.results:
         mark = "PASS" if r.passed else "FAIL"
         metric_bits = " ".join(f"{m.metric}={m.score:.2f}" for m in r.metrics)
-        lines.append(f"[{mark}] {r.case_id:<22} {metric_bits}")
+        err = f"  !! {r.error}" if getattr(r, "error", None) else ""
+        lines.append(f"[{mark}] {r.case_id:<22} {metric_bits}{err}")
     lines += [
         "-" * 64,
         f"pass rate : {run.pass_rate:.0%}  ({sum(1 for r in run.results if r.passed)}/{len(run.results)})",
         f"avg score : {run.avg_score:.2f}",
-        f"by metric : " + ", ".join(f"{k}={v:.2f}" for k, v in run.score_by_metric().items()),
+        "by metric : " + ", ".join(f"{k}={v:.2f}" for k, v in run.score_by_metric().items()),
+        f"latency   : avg {run.avg_latency_ms:.0f}ms  p95 {run.p95_latency_ms:.0f}ms",
         f"cost      : ${run.total_cost_usd:.4f}",
     ]
     return "\n".join(lines)
@@ -34,6 +36,7 @@ def to_markdown(run: EvalRun) -> str:
         f"- **Timestamp:** {run.timestamp}",
         f"- **Pass rate:** {run.pass_rate:.0%}",
         f"- **Average score:** {run.avg_score:.2f}",
+        f"- **Latency:** avg {run.avg_latency_ms:.0f}ms, p95 {run.p95_latency_ms:.0f}ms",
         f"- **Cost:** ${run.total_cost_usd:.4f}",
         "",
         "| Case | Result | " + " | ".join(run.score_by_metric().keys()) + " |",

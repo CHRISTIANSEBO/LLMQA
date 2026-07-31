@@ -133,17 +133,33 @@ python cli.py run [options]
 
   --dataset NAME|PATH        Packaged dataset name (e.g. qa_golden.yaml) or a file path
   --provider NAME            mock | mock-strong | mock-lite | mock-legacy | anthropic | openai | xai/grok
+  --judge-provider NAME      Separate model for llm_judge/hallucination
+                             (avoids a model grading its own output)
   --metrics M [M ...]        exact_match similarity llm_judge hallucination
   --tags T [T ...]           Only run cases with these tags (e.g. rag adversarial)
+
+  # Execution / resilience
   --concurrency N            Run N cases in parallel (default: 1)
   --timeout SECONDS          Hard per-call timeout for a provider request
   --retries N                Retries per provider call on failure (default: 2)
-  --max-cost USD             Stop the run once accumulated cost reaches this ceiling
   --judge-samples N          Poll the LLM judge N times and take the majority grade
-  --min-pass-rate FLOAT      Quality gate: exit 1 if the pass rate is below this
-  --regression               Compare to the last stored run
+  --max-cost USD             Stop the run once accumulated cost reaches this ceiling
+
+  # Quality gates (any failing gate exits 1)
+  --min-pass-rate FLOAT      Overall pass-rate gate
+  --min-tag-pass-rate TAG=R  Per-tag pass-rate gates, e.g. rag=0.9 adversarial=0.8
+  --min-metric-score M=S     Per-metric average-score gates, e.g. llm_judge=0.7
+  --max-avg-latency-ms FLOAT Latency budget (average case latency)
+  --max-p95-latency-ms FLOAT Latency budget (p95 case latency)
+  --max-cost-budget USD      Cost budget gate (fail if total run cost exceeds)
+
+  # Regression / baselines
+  --regression               Compare to a stored baseline run
+  --regression-baseline LBL  Compare to the latest run labeled LBL (default: last run)
   --regression-tolerance F   Allowed avg-score drop before failing (default: 0.05)
-  --markdown PATH            Write a Markdown report to PATH
+  --label LBL                Tag this stored run with a label (e.g. baseline)
+
+  --markdown PATH            Also write a Markdown report to PATH
   --junit PATH               Write a JUnit XML report to PATH (for CI test reporting)
   --github-annotations       Emit ::error:: annotations for failing cases (GitHub Actions)
   --db PATH                  SQLite run history (default: llmqa_runs.db)
@@ -151,6 +167,46 @@ python cli.py run [options]
   --no-cache                 Disable the response cache
   --cache-path FILE          Persist the response cache to this SQLite file
 ```
+
+### Determinism & reliability
+
+Because a QA harness has to be reproducible, live providers run at
+`temperature=0` with a fixed `seed` (OpenAI/xAI) and a request timeout. Transient
+provider errors (429/5xx) are retried with exponential backoff, and a call that
+still fails is recorded as a failed case (with the error) instead of aborting the
+whole run. Override with `LLMQA_TEMPERATURE` / `LLMQA_SEED`.
+
+### Flexible expected answers
+
+Real golden sets rarely have one exact string answer. Each case can declare:
+
+```yaml
+- id: capital-usa
+  input: "What is the capital of the United States? One word."
+  expected: "Washington"
+  accept: ["Washington, D.C.", "D.C."]   # any alternative counts
+- id: pi
+  input: "What is pi to two decimal places?"
+  expected: "3.14"
+  tolerance: 0.001                       # numeric answers within a delta
+- id: apollo
+  input: "In what year did Apollo 11 land?"
+  expected: "1969"
+  expected_regex: "\\b1969\\b"            # match a pattern, not a fixed string
+```
+
+### Response cache (cost saver)
+
+Providers keep an **in-memory response cache** keyed on
+`(provider, model, prompt, context)`. Identical calls within a process are
+served from the cache instead of re-hitting a paid API a cached hit is billed
+at `$0` and marked `cached`. This matters most for the live `anthropic` provider
+and the web dashboard, where the same golden case (or a repeated judge prompt)
+would otherwise be paid for again on every run. The dashboard reuses one
+cache-enabled provider instance per name across requests, so repeated runs
+really do hit the cache. Pass `--cache-path FILE` to persist the cache to a
+SQLite file (shared across processes / surviving restarts), or `--no-cache` to
+force a fresh call per case.
 
 ### Examples
 
@@ -175,8 +231,8 @@ python cli.py run --provider openai --dataset factual_qa.yaml \
 | Metric | What it measures |
 |--------|------------------|
 | `exact_match` | Normalized string match, with structural JSON comparison for JSON answers. |
-| `similarity` | Token overlap (Jaccard) similarity, swappable for embeddings later. |
-| `llm_judge` | LLM-as-judge with discrete grades and chain-of-thought. Robust verdict parsing with a heuristic fallback, and optional self-consistency (majority vote over N samples). Uses a deterministic heuristic on the mock provider. |
+| `similarity` | Token overlap (Jaccard) by default; real embedding cosine similarity via `LLMQA_SIMILARITY=embeddings` (falls back to Jaccard if no key). |
+| `llm_judge` | LLM-as-judge with discrete grades and chain-of-thought. Robust verdict parsing with a heuristic fallback, and optional self-consistency (majority vote over N samples via `--judge-samples`). Uses a deterministic heuristic on the mock provider. |
 | `hallucination` | Grounding check for cases with context; rewards correct refusals, and is N/A without context. |
 
 ## Per-case metric gating
@@ -216,7 +272,22 @@ tests/            # pytest suite for metrics, runner, cache, catalog, judge, web
 
 ## Deploy
 
-Deploys as a single service (Railway-ready via `railway.json` and `nixpacks.toml`, honors `$PORT`). On a self-hosted deploy, set any of `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, or `XAI_API_KEY` to enable that live provider, and set `LLMQA_CACHE` to a file path to persist the response cache. Without any key the dashboard runs on the free, deterministic `mock` provider.
+Deploys as a single service — Railway-ready via `railway.json` and `nixpacks.toml`, or with the included **`Dockerfile`** (`docker build -t llmqa . && docker run -p 8000:8000 llmqa`). It honors `$PORT`. On a self-hosted deploy, set any of `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, or `XAI_API_KEY` to enable that live provider, and set `LLMQA_CACHE` to a file path to persist the response cache. Without any key the dashboard runs on the free, deterministic `mock` provider.
+
+### Hardening the public API
+
+The dashboard's run endpoints are guarded so a public deploy can't be abused or
+burn your API budget. All are env-configurable:
+
+| Env var | Default | Effect |
+|---------|---------|--------|
+| `LLMQA_ALLOW_REAL_PROVIDERS` | off | Real (paid) providers are **blocked** unless this is truthy — even if keys are set. Mocks always work. |
+| `LLMQA_API_TOKEN` | unset | When set, mutating endpoints require `Authorization: Bearer <token>` (or `X-API-Token`). |
+| `LLMQA_RATE_LIMIT` / `LLMQA_RATE_WINDOW_S` | 30 / 60 | Per-IP sliding-window rate limit on run endpoints (0 disables). |
+| `ALLOWED_ORIGINS` | none | CORS is closed by default (frontend is same-origin); set a comma list only for a split deploy. |
+
+Request-supplied dataset names are resolved only against the packaged
+`datasets/` directory (no path traversal / arbitrary file reads).
 
 ## Contributing
 

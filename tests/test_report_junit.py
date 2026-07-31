@@ -1,5 +1,4 @@
 """Tests for JUnit XML report output (CI test-reporting integration)."""
-from pathlib import Path
 from xml.etree import ElementTree as ET
 
 from llmqa.catalog import DATASETS_DIR, resolve_cli_dataset

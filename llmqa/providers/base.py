@@ -3,7 +3,8 @@ from __future__ import annotations
 
 import time
 from abc import ABC, abstractmethod
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FuturesTimeout
 from dataclasses import dataclass
 
 from ..cache import CacheBackend, build_cache, cache_key

@@ -13,6 +13,10 @@ _OUTPUT_COST_PER_TOKEN = 4.00 / 1_000_000
 class AnthropicProvider(Provider):
     name = "anthropic"
 
+    # Determinism: temperature 0 for reproducible gating. Env-overridable.
+    _temperature = 0.0
+    _timeout_s = 30.0
+
     def __init__(self, model: str = "claude-haiku-4-5-20251001", *, use_cache: bool = True) -> None:
         super().__init__(use_cache=use_cache)
         api_key = os.environ.get("ANTHROPIC_API_KEY")
@@ -22,13 +26,15 @@ class AnthropicProvider(Provider):
             )
         import anthropic  # imported lazily so 'mock' runs without the dep
         self.model = model
-        self._client = anthropic.Anthropic(api_key=api_key)
+        self._temperature = float(os.environ.get("LLMQA_TEMPERATURE", self._temperature))
+        self._client = anthropic.Anthropic(api_key=api_key, timeout=self._timeout_s)
 
     def _complete(self, prompt: str, context: str | None = None) -> tuple[str, float]:
         content = prompt if context is None else f"Context:\n{context}\n\nQuestion: {prompt}"
         msg = self._client.messages.create(
             model=self.model,
             max_tokens=512,
+            temperature=self._temperature,
             messages=[{"role": "user", "content": content}],
         )
         text = "".join(block.text for block in msg.content if block.type == "text").strip()
