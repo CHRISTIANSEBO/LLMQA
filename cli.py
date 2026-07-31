@@ -37,7 +37,9 @@ def cmd_run(args: argparse.Namespace) -> int:
     judge = provider
     metrics = []
     for name in args.metrics:
-        if name in ("llm_judge", "hallucination"):
+        if name == "llm_judge":
+            metrics.append(build_metric(name, judge=judge, samples=args.judge_samples))
+        elif name == "hallucination":
             metrics.append(build_metric(name, judge=judge))
         else:
             metrics.append(build_metric(name))
@@ -101,6 +103,9 @@ def build_parser() -> argparse.ArgumentParser:
                    help="Per-call hard timeout in seconds for a provider request")
     r.add_argument("--retries", type=int, default=2,
                    help="Retries per provider call on failure (exponential backoff)")
+    r.add_argument("--judge-samples", type=int, default=1,
+                   help="Poll the LLM judge N times and take the majority grade "
+                        "(self-consistency; denoises a flaky judge)")
     r.add_argument("--max-cost", type=float, default=None,
                    help="Stop the run once accumulated cost (USD) reaches this ceiling")
     r.add_argument("--min-pass-rate", type=float, help="Fail (exit 1) below this pass rate")
