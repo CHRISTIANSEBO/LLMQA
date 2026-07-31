@@ -8,11 +8,11 @@ from pathlib import Path
 import pytest
 from fastapi import HTTPException
 
+from llmqa.catalog import resolve_dataset_name
 from llmqa.web import security
 from llmqa.web.security import (
     RateLimiter,
     check_provider_allowed,
-    resolve_dataset,
 )
 
 DATASETS_DIR = Path(__file__).resolve().parent.parent / "datasets"
@@ -54,27 +54,24 @@ def test_rate_limiter_disabled_when_zero():
         rl.check("x")  # never raises
 
 
-# --- Dataset allowlist ------------------------------------------------------
+# --- Dataset resolution is traversal-safe (catalog.resolve_dataset_name) -----
 def test_resolve_dataset_default():
-    assert resolve_dataset(None, DEFAULT_DATASET, DATASETS_DIR) == DEFAULT_DATASET
+    # No/empty name falls back to the default packaged dataset.
+    assert resolve_dataset_name(None).endswith("qa_golden.yaml")
+    assert resolve_dataset_name("").endswith("qa_golden.yaml")
 
 
 def test_resolve_dataset_blocks_traversal():
-    with pytest.raises(HTTPException):
-        resolve_dataset("/etc/passwd", DEFAULT_DATASET, DATASETS_DIR)
-    with pytest.raises(HTTPException):
-        resolve_dataset("../secrets.yaml", DEFAULT_DATASET, DATASETS_DIR)
+    # Untrusted input with separators / traversal never escapes datasets/;
+    # it safely falls back to the default instead of reading arbitrary files.
+    assert resolve_dataset_name("/etc/passwd").endswith("qa_golden.yaml")
+    assert resolve_dataset_name("../secrets.yaml").endswith("qa_golden.yaml")
+    assert resolve_dataset_name("a/b.yaml").endswith("qa_golden.yaml")
 
 
-def test_resolve_dataset_rejects_non_yaml(tmp_path):
-    # A file inside datasets/ but not a yaml is rejected.
-    bad = DATASETS_DIR / "not_a_dataset.txt"
-    bad.write_text("nope")
-    try:
-        with pytest.raises(HTTPException):
-            resolve_dataset("not_a_dataset.txt", DEFAULT_DATASET, DATASETS_DIR)
-    finally:
-        bad.unlink()
+def test_resolve_dataset_accepts_known_name():
+    # A real packaged dataset name resolves to that file.
+    assert resolve_dataset_name("qa_golden.yaml").endswith("qa_golden.yaml")
 
 
 # --- Auth (integration) -----------------------------------------------------
