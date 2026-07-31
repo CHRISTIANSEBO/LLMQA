@@ -18,6 +18,11 @@ class Provider(ABC):
     name: str = "base"
     model: str = "unknown"
 
+    # Transient-failure handling for network providers. Mocks never raise, so
+    # these are effectively no-ops for them. Overridable per provider.
+    max_retries: int = 2       # total extra attempts after the first
+    retry_backoff_s: float = 0.6  # base for exponential backoff (with jitter)
+
     def __init__(self, *, use_cache: bool = True) -> None:
         # In-memory response cache: de-duplicates identical calls within this
         # process so repeated runs (dashboard clicks, regression compares, a
@@ -51,10 +56,33 @@ class Provider(ABC):
                 return ModelResponse(text=text, cost_usd=0.0, latency_ms=0.0, cached=True)
 
         start = time.perf_counter()
-        text, cost = self._complete(prompt, context)
+        text, cost = self._complete_with_retries(prompt, context)
         latency_ms = (time.perf_counter() - start) * 1000
 
         if self._use_cache:
             self._cache[self._cache_key(prompt, context)] = (text, cost)
 
         return ModelResponse(text=text, cost_usd=cost, latency_ms=latency_ms)
+
+    def _complete_with_retries(self, prompt: str, context: str | None) -> tuple[str, float]:
+        """Call ``_complete`` with exponential backoff + jitter on transient errors.
+
+        A flaky 429/5xx from a paid API shouldn't nuke an entire eval run, so we
+        retry a bounded number of times before giving up. The final failure is
+        re-raised for the runner to record as a per-case error.
+        """
+        import random
+
+        attempts = self.max_retries + 1
+        last_exc: Exception | None = None
+        for i in range(attempts):
+            try:
+                return self._complete(prompt, context)
+            except Exception as exc:  # noqa: BLE001 - provider SDKs raise many types
+                last_exc = exc
+                if i == attempts - 1:
+                    break
+                sleep_s = self.retry_backoff_s * (2 ** i) + random.uniform(0, 0.2)
+                time.sleep(sleep_s)
+        assert last_exc is not None
+        raise last_exc

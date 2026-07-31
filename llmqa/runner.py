@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from collections.abc import Generator
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import yaml
@@ -39,19 +39,31 @@ def iter_eval(
         dataset=str(dataset_path),
         model=provider.model,
         provider=provider.name,
-        timestamp=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        timestamp=datetime.now(UTC).isoformat(timespec="seconds"),
     )
 
     for case in cases:
-        resp = provider.generate(case.input, case.context)
-        run.total_cost_usd += resp.cost_usd
+        error: str | None = None
+        try:
+            resp = provider.generate(case.input, case.context)
+            text, cost, latency = resp.text, resp.cost_usd, resp.latency_ms
+        except Exception as exc:  # noqa: BLE001 - degrade gracefully, don't abort the run
+            # A provider failure (after retries) shouldn't kill the whole run.
+            # Record it as a failed case with an empty output so metrics score
+            # it as a fail and the report/gates surface the problem.
+            error = f"{type(exc).__name__}: {exc}"
+            text, cost, latency = "", 0.0, 0.0
+
+        run.total_cost_usd += cost
         cr = CaseResult(
             case_id=case.id,
             tags=case.tags,
             gate_metrics=case.gate_metrics,
-            output=resp.text,
-            latency_ms=round(resp.latency_ms, 1),
-            metrics=[m.score(case, resp.text) for m in metrics],
+            output=text,
+            latency_ms=round(latency, 1),
+            cost_usd=round(cost, 6),
+            error=error,
+            metrics=[m.score(case, text) for m in metrics],
         )
         run.results.append(cr)
         yield run, cr
@@ -65,13 +77,13 @@ def run_eval(
 ) -> EvalRun:
     """Run every case and return the completed EvalRun. Thin wrapper over iter_eval."""
     run = None
-    for run, _ in iter_eval(dataset_path, provider, metrics, tags):
+    for run, _ in iter_eval(dataset_path, provider, metrics, tags):  # noqa: B007 - keep last run
         pass
     if run is None:  # empty dataset or all cases filtered out
         run = EvalRun(
             dataset=str(dataset_path),
             model=provider.model,
             provider=provider.name,
-            timestamp=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            timestamp=datetime.now(UTC).isoformat(timespec="seconds"),
         )
     return run

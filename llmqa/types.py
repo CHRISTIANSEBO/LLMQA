@@ -18,6 +18,23 @@ class TestCase(BaseModel):
     # you don't fail a summarization case on exact string match.
     gate_metrics: list[str] = Field(default_factory=list)
 
+    # --- Flexible expected-answer matching (used by exact_match) --------------
+    # Additional acceptable answers, any of which counts as a full match.
+    # Real questions often have several correct phrasings ("US" / "USA" /
+    # "United States"), and gating on a single string produces false failures.
+    accept: list[str] = Field(default_factory=list)
+    # If set, the output matches when this regular expression is found in it.
+    # Handy for format checks ("answer is a 4-digit year") without pinning an
+    # exact string.
+    expected_regex: str | None = None
+    # For numeric answers, allow the output to differ from `expected` by up to
+    # this absolute tolerance (e.g. tolerance: 0.01 for a rounded float).
+    tolerance: float | None = None
+
+    def acceptable(self) -> list[str]:
+        """All exact-acceptable strings: the primary expected plus alternates."""
+        return [self.expected, *self.accept]
+
 
 class MetricResult(BaseModel):
     """The outcome of one metric scoring one test case."""
@@ -36,6 +53,8 @@ class CaseResult(BaseModel):
     output: str
     metrics: list[MetricResult] = Field(default_factory=list)
     latency_ms: float = 0.0
+    cost_usd: float = 0.0
+    error: str | None = None
 
     # Metric names that gate this case's pass/fail. Empty list => every metric
     # gates (backwards-compatible). Set from TestCase.gate_metrics by the runner.
@@ -89,3 +108,28 @@ class EvalRun(BaseModel):
             for m in r.metrics:
                 buckets.setdefault(m.metric, []).append(m.score)
         return {k: sum(v) / len(v) for k, v in buckets.items()}
+
+    @property
+    def avg_latency_ms(self) -> float:
+        lats = [r.latency_ms for r in self.results]
+        return sum(lats) / len(lats) if lats else 0.0
+
+    @property
+    def p95_latency_ms(self) -> float:
+        """95th-percentile case latency (nearest-rank). Useful as a budget gate."""
+        lats = sorted(r.latency_ms for r in self.results)
+        if not lats:
+            return 0.0
+        idx = min(len(lats) - 1, int(round(0.95 * (len(lats) - 1))))
+        return lats[idx]
+
+    def pass_rate_by_tag(self) -> dict[str, float]:
+        """Pass rate computed within each tag (a case counts for every tag)."""
+        passed: dict[str, int] = {}
+        total: dict[str, int] = {}
+        for r in self.results:
+            for tag in r.tags:
+                total[tag] = total.get(tag, 0) + 1
+                if r.passed:
+                    passed[tag] = passed.get(tag, 0) + 1
+        return {t: passed.get(t, 0) / n for t, n in total.items()}

@@ -10,9 +10,9 @@ from __future__ import annotations
 import json
 import re
 
-from .base import Metric
+from ..providers import MockProvider, Provider
 from ..types import MetricResult, TestCase
-from ..providers import Provider, MockProvider
+from .base import Metric
 
 # Discrete grades -> normalized score.
 _GRADES = {"correct": 1.0, "partial": 0.5, "incorrect": 0.0}

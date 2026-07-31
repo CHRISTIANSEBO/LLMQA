@@ -3,9 +3,9 @@ from __future__ import annotations
 
 from .base import Metric
 from .exact_match import ExactMatchMetric
-from .similarity import SimilarityMetric
-from .llm_judge import LLMJudgeMetric
 from .hallucination import HallucinationMetric
+from .llm_judge import LLMJudgeMetric
+from .similarity import SimilarityMetric
 
 # Registry so the CLI / config can select metrics by name.
 REGISTRY: dict[str, type[Metric]] = {
