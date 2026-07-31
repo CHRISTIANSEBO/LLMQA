@@ -8,6 +8,7 @@ from pathlib import Path
 
 import yaml
 
+from .catalog import dataset_hash
 from .metrics import Metric
 from .providers import Provider
 from .types import CaseResult, EvalRun, TestCase
@@ -76,6 +77,7 @@ def iter_eval(
 
     run = EvalRun(
         dataset=str(dataset_path),
+        dataset_hash=dataset_hash(dataset_path),
         model=provider.model,
         provider=provider.name,
         timestamp=datetime.now(timezone.utc).isoformat(timespec="seconds"),

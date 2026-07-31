@@ -65,6 +65,10 @@ class EvalRun(BaseModel):
     """A full evaluation run: every case result plus aggregate stats."""
 
     dataset: str
+    # Short content hash of the dataset file (e.g. "sha256:ab12..."). Lets the
+    # trend/regression views know when a score change is really an
+    # apples-to-oranges comparison because the dataset itself changed.
+    dataset_hash: str = ""
     model: str
     provider: str
     results: list[CaseResult] = Field(default_factory=list)

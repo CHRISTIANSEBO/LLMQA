@@ -25,6 +25,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
+from ..catalog import list_datasets, resolve_dataset_name
 from ..metrics import REGISTRY, build_metric
 from ..providers import MOCK_PROVIDERS, get_provider
 from ..runner import iter_eval, load_dataset, run_eval
@@ -96,6 +97,7 @@ class CompareRequest(BaseModel):
         default_factory=lambda: ["exact_match", "similarity", "llm_judge", "hallucination"]
     )
     tags: list[str] | None = None
+    dataset: str | None = None
 
 
 class RunRequest(BaseModel):
@@ -140,8 +142,8 @@ def health() -> dict:
 
 
 @app.get("/api/config")
-def config() -> dict:
-    dataset_path = DEFAULT_DATASET
+def config(dataset: str | None = None) -> dict:
+    dataset_path = resolve_dataset_name(dataset)
     cases = load_dataset(dataset_path)
 
     real_providers = []
@@ -156,7 +158,9 @@ def config() -> dict:
         "providers": list(MOCK_PROVIDERS) + real_providers,
         "all_providers": list(MOCK_PROVIDERS) + ["anthropic", "openai", "xai"],
         "metrics": list(REGISTRY),
-        "dataset": dataset_path,
+        "dataset": Path(dataset_path).name,
+        "datasets": list_datasets(),
+        "default_dataset": Path(DEFAULT_DATASET).name,
         "cases": [
             {"id": c.id, "input": c.input, "expected": c.expected,
              "tags": c.tags, "has_context": bool(c.context),
@@ -200,7 +204,7 @@ def run(req: RunRequest) -> dict:
         else:
             metrics.append(build_metric(name))
 
-    dataset = req.dataset or DEFAULT_DATASET
+    dataset = resolve_dataset_name(req.dataset)
     eval_run = run_eval(
         dataset, provider, metrics,
         tags=req.tags, case_ids=req.case_ids,
@@ -245,7 +249,7 @@ def run_stream(req: RunRequest):
         else:
             metrics.append(build_metric(name))
 
-    dataset_path = req.dataset or DEFAULT_DATASET
+    dataset_path = resolve_dataset_name(req.dataset)
     store = req.store
 
     conc = _clamp_concurrency(req.concurrency)
@@ -300,7 +304,7 @@ def compare(req: CompareRequest) -> dict:
             else:
                 metrics.append(build_metric(name))
 
-        eval_run = run_eval(DEFAULT_DATASET, provider, metrics, tags=req.tags)
+        eval_run = run_eval(resolve_dataset_name(req.dataset), provider, metrics, tags=req.tags)
 
         payload = eval_run.model_dump()
         payload["pass_rate"] = eval_run.pass_rate
