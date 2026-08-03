@@ -52,6 +52,7 @@ async function init() {
   initDownloads();
   initDatasetPeek();
   initHistoryDiff();
+  initChartZoom();
   initTour();
   await loadHistory();
   // Always start fresh: no preset runs and no auto-loaded previous run. The
@@ -264,11 +265,11 @@ function buildResultRow(r) {
   tr.dataset.caseId = r.case_id;
   tr.dataset.output = r.output || "";
   tr.title = "Click to expand";
-  tr.innerHTML = `<td><strong class="expand-toggle">\u25b8 ${r.case_id}</strong></td>
-    <td><span class="badge ${badge ? "pass" : "fail"}"><span class="glyph">${bGlyph}</span>${badge ? "PASS" : "FAIL"}</span></td>
-    <td>${tagSpans}</td>
-    <td class="latency">${ms}</td>
-    <td><div class="mgrid">${metricCells}</div></td>`;
+  tr.innerHTML = `<td data-label="Case"><strong class="expand-toggle">\u25b8 ${r.case_id}</strong></td>
+    <td data-label="Result"><span class="badge ${badge ? "pass" : "fail"}"><span class="glyph">${bGlyph}</span>${badge ? "PASS" : "FAIL"}</span></td>
+    <td data-label="Tags">${tagSpans}</td>
+    <td data-label="Latency" class="latency">${ms}</td>
+    <td data-label="Metrics"><div class="mgrid">${metricCells}</div></td>`;
   tr.addEventListener("click", toggleDetail);
   return tr;
 }
@@ -441,8 +442,9 @@ function renderTrend(runs) {
       <path d="${path("pass_rate")}" fill="none" stroke="${inkColor}" stroke-width="2.5"/>
       ${dots("avg_score", inkColor2)}${dots("pass_rate", inkColor)}
     </svg>
-    <div style="font-size:12px;color:var(--muted);font-family:var(--mono)">
+    <div class="chart-cap">
       ―― pass rate (solid) &nbsp;&nbsp; –– avg score (dashed) &nbsp; (oldest → newest, ${n} runs)
+      <span class="zoom-hint">⤢ tap to enlarge / download</span>
     </div>`;
 }
 
@@ -522,10 +524,10 @@ function renderComparison({ runs, providers }) {
     const tr = document.createElement("tr");
     if (flip) tr.className = "cmp-flip";
     tr.innerHTML = `
-      <td><strong>${cid}</strong></td>
-      <td>${badgeHtml(passA)} <span class="cmp-score">${scoreA.toFixed(2)}</span></td>
-      <td>${badgeHtml(passB)} <span class="cmp-score">${scoreB.toFixed(2)}</span></td>
-      <td class="cmp-delta ${delta > 0 ? 'pos' : delta < 0 ? 'neg' : 'neu'}">${delta >= 0 ? '+' : ''}${delta.toFixed(2)}</td>`;
+      <td data-label="Case"><strong>${cid}</strong></td>
+      <td data-label="${esc(pA)}">${badgeHtml(passA)} <span class="cmp-score">${scoreA.toFixed(2)}</span></td>
+      <td data-label="${esc(pB)}">${badgeHtml(passB)} <span class="cmp-score">${scoreB.toFixed(2)}</span></td>
+      <td data-label="Delta" class="cmp-delta ${delta > 0 ? 'pos' : delta < 0 ? 'neg' : 'neu'}">${delta >= 0 ? '+' : ''}${delta.toFixed(2)}</td>`;
     body.appendChild(tr);
   });
 
@@ -594,7 +596,8 @@ function renderCmpChart(cases, runA, runB, labelA, labelB) {
 
   el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="per-case score comparison">
     ${gridLines}${bars}${legend}
-  </svg>`;
+  </svg>
+  <div class="chart-cap"><span class="zoom-hint">⤢ tap to enlarge / download</span></div>`;
 }
 
 function avgScore(r) {
@@ -918,6 +921,107 @@ function casePassed(r) {
 }
 
 // =====================================================================
+// Chart zoom + PNG export — tap any chart (trend / comparison) to enlarge it
+// in a modal, then download it as a PNG. Helps a lot on mobile where the
+// inline SVGs are small and the comparison chart otherwise scrolls sideways.
+// =====================================================================
+function initChartZoom() {
+  const modal = $("#chartModal");
+  if (!modal) return;
+  let currentSvg = null;
+  let currentName = "llmqa-chart";
+
+  const open = (svg, title, name) => {
+    currentSvg = svg;
+    currentName = name;
+    const body = $("#cm-body");
+    body.innerHTML = "";
+    const clone = svg.cloneNode(true);
+    clone.removeAttribute("width");
+    clone.removeAttribute("height");
+    clone.style.width = "100%";
+    clone.style.height = "auto";
+    body.appendChild(clone);
+    const t = $("#cm-title");
+    if (t) t.textContent = title;
+    modal.hidden = false;
+    document.body.style.overflow = "hidden";
+  };
+  const close = () => {
+    modal.hidden = true;
+    $("#cm-body").innerHTML = "";
+    document.body.style.overflow = "";
+  };
+
+  // Event delegation: charts are re-rendered via innerHTML, so bind on document.
+  document.addEventListener("click", (e) => {
+    const svg = e.target.closest && e.target.closest("#trend svg, #cmp-chart svg");
+    if (!svg) return;
+    const isTrend = !!svg.closest("#trend");
+    open(
+      svg,
+      isTrend ? "Quality trend" : "Provider comparison",
+      isTrend ? "llmqa-trend" : "llmqa-comparison"
+    );
+  });
+
+  const closeBtn = $("#cm-close");
+  if (closeBtn) closeBtn.addEventListener("click", close);
+  const backdrop = modal.querySelector(".cm-backdrop");
+  if (backdrop) backdrop.addEventListener("click", close);
+  window.addEventListener("keydown", (e) => {
+    if (!modal.hidden && e.key === "Escape") close();
+  });
+  const dl = $("#cm-download");
+  if (dl) dl.addEventListener("click", () => {
+    if (currentSvg) svgToPng(currentSvg, currentName + ".png");
+  });
+}
+
+// Rasterize an inline SVG to a PNG download. Colors are already inlined at
+// render time (computed from the CSS theme tokens), so the exported image
+// matches the on-screen light/dark palette. A solid paper background is added
+// so the PNG isn't transparent.
+function svgToPng(svg, filename, scale = 2) {
+  const vb = svg.viewBox && svg.viewBox.baseVal;
+  const w = Math.round(vb && vb.width ? vb.width : (svg.clientWidth || 900));
+  const h = Math.round(vb && vb.height ? vb.height : (svg.clientHeight || 140));
+  const clone = svg.cloneNode(true);
+  clone.setAttribute("width", w);
+  clone.setAttribute("height", h);
+  const css = getComputedStyle(document.documentElement);
+  const bg = css.getPropertyValue("--paper-edge").trim() || "#ffffff";
+  const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+  rect.setAttribute("x", 0); rect.setAttribute("y", 0);
+  rect.setAttribute("width", w); rect.setAttribute("height", h);
+  rect.setAttribute("fill", bg);
+  clone.insertBefore(rect, clone.firstChild);
+  const xml = new XMLSerializer().serializeToString(clone);
+  const svg64 = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(xml)));
+  const img = new Image();
+  img.onload = () => {
+    const canvas = document.createElement("canvas");
+    canvas.width = w * scale;
+    canvas.height = h * scale;
+    const ctx = canvas.getContext("2d");
+    ctx.scale(scale, scale);
+    ctx.drawImage(img, 0, 0);
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }, "image/png");
+  };
+  img.src = svg64;
+}
+
+// =====================================================================
 // 60-second guided tour
 // =====================================================================
 const TOUR = [
@@ -946,6 +1050,8 @@ function initTour() {
   if (next) next.addEventListener("click", () => stepTour(1));
   if (prev) prev.addEventListener("click", () => stepTour(-1));
   if (skip) skip.addEventListener("click", endTour);
+  window.addEventListener("scroll", onTourReflow, { passive: true });
+  window.addEventListener("resize", onTourReflow);
   window.addEventListener("keydown", (e) => {
     if ($("#tour").hidden) return;
     if (e.key === "Escape") endTour();
@@ -984,17 +1090,44 @@ function showTourStep() {
   if (target && tip) {
     target.scrollIntoView({ behavior: "smooth", block: "center" });
     // Position after the smooth scroll settles so the ring lands correctly.
-    setTimeout(() => {
-      const rect = target.getBoundingClientRect();
-      tip.hidden = false;
-      tip.style.top = (window.scrollY + rect.top - 6) + "px";
-      tip.style.left = (window.scrollX + rect.left - 6) + "px";
-      tip.style.width = rect.width + 12 + "px";
-      tip.style.height = rect.height + 12 + "px";
-    }, 180);
+    setTimeout(() => positionTour(target), 200);
   } else if (tip) {
     tip.hidden = true;
   }
+}
+
+// Place the spotlight ring over the target and move the bubble to whichever
+// half of the viewport the target is NOT in, so on small screens the bubble
+// never covers the control it's describing.
+function positionTour(target) {
+  const tip = $("#tip");
+  const bubble = document.querySelector(".tour-bubble");
+  if (!target || !tip) return;
+  const rect = target.getBoundingClientRect();
+  tip.hidden = false;
+  tip.style.top = (window.scrollY + rect.top - 6) + "px";
+  tip.style.left = (window.scrollX + rect.left - 6) + "px";
+  tip.style.width = rect.width + 12 + "px";
+  tip.style.height = rect.height + 12 + "px";
+  if (bubble) {
+    // If the target sits in the lower half of the viewport, dock the bubble to
+    // the top; otherwise keep it at the bottom.
+    const targetMid = rect.top + rect.height / 2;
+    bubble.classList.toggle("bubble-top", targetMid > window.innerHeight * 0.55);
+  }
+}
+
+// Keep the ring/bubble aligned if the user scrolls or rotates the device
+// mid-tour (common on mobile).
+function currentTourTarget() {
+  const step = TOUR[_tourIdx];
+  return step ? document.querySelector(step.sel) : null;
+}
+let _tourReflow = null;
+function onTourReflow() {
+  if ($("#tour").hidden) return;
+  if (_tourReflow) cancelAnimationFrame(_tourReflow);
+  _tourReflow = requestAnimationFrame(() => positionTour(currentTourTarget()));
 }
 
 function endTour() {

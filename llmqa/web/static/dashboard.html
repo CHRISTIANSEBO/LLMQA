@@ -203,6 +203,20 @@
 
 <div id="tip" class="tip" role="tooltip" hidden></div>
 
+<div id="chartModal" class="chart-modal" hidden>
+  <div class="cm-backdrop"></div>
+  <div class="cm-panel" role="dialog" aria-modal="true" aria-label="Enlarged chart">
+    <div class="cm-head">
+      <span class="cm-title" id="cm-title">Chart</span>
+      <div class="cm-actions">
+        <button id="cm-download" class="mini-btn" type="button" title="Download chart as PNG">↓ PNG</button>
+        <button id="cm-close" class="mini-btn" type="button" aria-label="Close">✕ Close</button>
+      </div>
+    </div>
+    <div class="cm-body" id="cm-body"></div>
+  </div>
+</div>
+
 <script src="/assets/theme.js"></script>
 <script src="/assets/app.js"></script>
 </body>
