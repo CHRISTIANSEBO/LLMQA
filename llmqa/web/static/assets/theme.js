@@ -62,9 +62,50 @@
     else if (mq.addListener) mq.addListener(onChange);
   }
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", init);
-  } else {
+  /* Mobile masthead menu: the hamburger toggles the nav dropdown. Closes on
+   * link click, Escape, or an outside click so it behaves like a native menu. */
+  function initMenu() {
+    var btn = document.getElementById("nav-toggle");
+    var nav = document.getElementById("topnav");
+    if (!btn || !nav) return;
+
+    function setOpen(open) {
+      nav.classList.toggle("is-open", open);
+      btn.setAttribute("aria-expanded", String(open));
+      btn.setAttribute("aria-label", open ? "Close menu" : "Open menu");
+    }
+
+    btn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      setOpen(btn.getAttribute("aria-expanded") !== "true");
+    });
+    nav.addEventListener("click", function (e) {
+      if (e.target.closest("a")) setOpen(false);
+    });
+    document.addEventListener("click", function (e) {
+      if (
+        btn.getAttribute("aria-expanded") === "true" &&
+        !nav.contains(e.target) &&
+        !btn.contains(e.target)
+      )
+        setOpen(false);
+    });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && btn.getAttribute("aria-expanded") === "true") {
+        setOpen(false);
+        btn.focus();
+      }
+    });
+  }
+
+  function boot() {
     init();
+    initMenu();
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", boot);
+  } else {
+    boot();
   }
 })();
