@@ -717,6 +717,18 @@ thead th { position: sticky; top: 0; z-index: 2; background: var(--paper-edge); 
   /* Expanded detail spans the full card width. */
   #results tr.detail-row { display: block; }
   #results tr.detail-row td.detail-cell { display: block; width: 100%; padding: 0; }
+
+  /* ---- Collapsed-by-default cards ----
+     A card renders compact: just the case id header + PASS/FAIL badge.
+     Tags / Latency / Metrics stay hidden until the card is expanded (tap
+     anywhere on the card, same toggle that opens the input/output detail). */
+  #results tr.result-row td:nth-child(n+3) { display: none; }
+  #results tr.result-row.expanded td { display: flex; }
+  #results tr.result-row.expanded td[data-label="Metrics"] { flex-direction: column;
+    align-items: stretch; }
+  #results tr.result-row.expanded td:empty { display: none; }
+  /* Make the collapsed header feel tappable. */
+  #results tr.result-row td:first-child .expand-toggle { display: inline-flex; align-items: center; }
 }
 
 /* =====================================================================
@@ -739,4 +751,45 @@ thead th { position: sticky; top: 0; z-index: 2; background: var(--paper-edge); 
 
   /* Long mono output must wrap, never force horizontal scroll. */
   .dv { overflow-wrap: anywhere; word-break: break-word; }
+}
+
+/* =====================================================================
+   PWA install prompt — "Install app" (desktop) / "Add to Home Screen"
+   (mobile). Ink-on-paper pill, bottom-right, with a dismiss affordance.
+   ===================================================================== */
+.pwa-wrap { position: fixed; right: 16px; bottom: 16px; z-index: 80; display: flex;
+  align-items: stretch; box-shadow: 0 6px 22px rgba(0,0,0,0.22); border-radius: 6px; }
+.pwa-wrap[hidden] { display: none; }
+.pwa-install { display: inline-flex; align-items: center; gap: 8px; background: var(--ink);
+  color: var(--on-ink); border: 1px solid var(--ink); border-radius: 6px 0 0 6px;
+  padding: 11px 15px; font-family: var(--mono); font-size: 13px; letter-spacing: 0.2px;
+  cursor: pointer; }
+.pwa-install[hidden] { display: none; }
+.pwa-install:hover { background: var(--ink-strong); }
+.pwa-install:active { transform: translateY(1px); }
+.pwa-ic { font-size: 15px; line-height: 1; }
+.pwa-dismiss { background: var(--ink); color: var(--on-ink); border: 1px solid var(--ink);
+  border-left: 1px solid rgba(255,255,255,0.22); border-radius: 0 6px 6px 0; padding: 0 11px;
+  cursor: pointer; font-size: 12px; line-height: 1; }
+.pwa-dismiss:hover { background: var(--ink-strong); }
+
+/* iOS "Add to Home Screen" instruction sheet (Safari can't fire the prompt). */
+.pwa-ios { position: fixed; inset: 0; z-index: 130; display: flex;
+  align-items: flex-end; justify-content: center; }
+.pwa-ios[hidden] { display: none; }
+.pwa-ios-backdrop { position: absolute; inset: 0; background: rgba(17,17,17,0.55); }
+.pwa-ios-card { position: relative; z-index: 1; width: min(440px, 94vw); margin: 0 0 18px;
+  background: var(--paper-edge); border: 1px solid var(--rule-strong); border-radius: 10px;
+  padding: 20px 22px; box-shadow: 0 -6px 40px rgba(0,0,0,0.3); }
+.pwa-ios-card h3 { margin: 0 0 12px; font-family: var(--serif); font-size: 20px; }
+.pwa-ios-card ol { margin: 0 0 16px; padding-left: 20px; color: var(--ink-2); font-size: 14px;
+  line-height: 1.75; }
+.pwa-ios-glyph { font-family: var(--mono); font-weight: 700; }
+.pwa-ios-close { display: block; width: 100%; padding: 10px; }
+
+@media (max-width: 480px) {
+  /* Stay a compact pill in the corner so it covers as little content as
+     possible; it's dismissible and only appears when installable. */
+  .pwa-wrap { right: 12px; bottom: 12px; }
+  .pwa-install { padding: 10px 13px; font-size: 12.5px; }
 }
