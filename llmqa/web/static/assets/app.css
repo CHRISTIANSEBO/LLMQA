@@ -717,6 +717,18 @@ thead th { position: sticky; top: 0; z-index: 2; background: var(--paper-edge); 
   /* Expanded detail spans the full card width. */
   #results tr.detail-row { display: block; }
   #results tr.detail-row td.detail-cell { display: block; width: 100%; padding: 0; }
+
+  /* ---- Collapsed-by-default cards ----
+     A card renders compact: just the case id header + PASS/FAIL badge.
+     Tags / Latency / Metrics stay hidden until the card is expanded (tap
+     anywhere on the card, same toggle that opens the input/output detail). */
+  #results tr.result-row td:nth-child(n+3) { display: none; }
+  #results tr.result-row.expanded td { display: flex; }
+  #results tr.result-row.expanded td[data-label="Metrics"] { flex-direction: column;
+    align-items: stretch; }
+  #results tr.result-row.expanded td:empty { display: none; }
+  /* Make the collapsed header feel tappable. */
+  #results tr.result-row td:first-child .expand-toggle { display: inline-flex; align-items: center; }
 }
 
 /* =====================================================================
@@ -739,4 +751,60 @@ thead th { position: sticky; top: 0; z-index: 2; background: var(--paper-edge); 
 
   /* Long mono output must wrap, never force horizontal scroll. */
   .dv { overflow-wrap: anywhere; word-break: break-word; }
+}
+
+/* =====================================================================
+   PWA install — discoverable nav button + first-visit nudge + popup.
+   ===================================================================== */
+/* Masthead nav "Install app" button: matches the nav's small-caps links but
+   reads as a filled call-to-action so it's easy to spot. */
+.pwa-nav { display: inline-flex; align-items: center; gap: 6px; background: var(--ink);
+  color: var(--on-ink); border: 1px solid var(--ink); border-radius: 3px; padding: 5px 12px;
+  font-family: var(--mono); font-size: 12.5px; letter-spacing: 0.3px; cursor: pointer; }
+.pwa-nav[hidden] { display: none; }
+.pwa-nav:hover { background: var(--ink-strong); }
+.pwa-nav:active { transform: translateY(1px); }
+.pwa-nav-ic { font-size: 14px; line-height: 1; }
+
+/* First-visit floating nudge (bottom-right pill, opens the same popup). */
+.pwa-nudge { position: fixed; right: 16px; bottom: 16px; z-index: 80;
+  display: inline-flex; align-items: center; gap: 8px; background: var(--ink);
+  color: var(--on-ink); border: 1px solid var(--ink); border-radius: 6px;
+  padding: 11px 15px; font-family: var(--mono); font-size: 13px; letter-spacing: 0.2px;
+  cursor: pointer; box-shadow: 0 6px 22px rgba(0,0,0,0.22); }
+.pwa-nudge:hover { background: var(--ink-strong); }
+.pwa-nudge:active { transform: translateY(1px); }
+
+/* Install popup (shared, all widths). */
+.pwa-modal { position: fixed; inset: 0; z-index: 130; display: flex;
+  align-items: center; justify-content: center; padding: 20px; }
+.pwa-modal[hidden] { display: none; }
+.pwa-modal-backdrop { position: absolute; inset: 0; background: rgba(17,17,17,0.58); }
+.pwa-modal-card { position: relative; z-index: 1; width: min(460px, 94vw); max-height: 92vh;
+  overflow: auto; background: var(--paper-edge); border: 1px solid var(--rule-strong);
+  border-radius: 10px; padding: 26px 26px 22px; text-align: center;
+  box-shadow: 0 16px 54px rgba(0,0,0,0.36); }
+.pwa-modal-x { position: absolute; top: 10px; right: 12px; background: none; border: none;
+  color: var(--muted); font-size: 15px; cursor: pointer; font-family: var(--mono);
+  line-height: 1; padding: 4px; }
+.pwa-modal-x:hover { color: var(--ink); }
+.pwa-modal-mark { display: flex; justify-content: center; margin-bottom: 12px; }
+.pwa-modal-mark .brand-logo { width: 44px; height: 44px; }
+.pwa-modal-card h3 { margin: 0 0 10px; font-family: var(--serif); font-size: 23px; }
+.pwa-modal-lead { margin: 0 0 16px; color: var(--ink-2); font-size: 14px; line-height: 1.6; }
+.pwa-modal-body { text-align: left; }
+.pwa-hint { margin: 0 0 4px; color: var(--ink-2); font-size: 13.5px; line-height: 1.6;
+  font-family: var(--mono); }
+.pwa-steps { margin: 0 auto 6px; padding-left: 20px; color: var(--ink-2); font-size: 14px;
+  line-height: 1.8; text-align: left; }
+.pwa-glyph { font-family: var(--mono); font-weight: 700; }
+.pwa-modal-actions { display: flex; flex-direction: column; align-items: stretch; gap: 10px;
+  margin-top: 18px; }
+.pwa-do-install { width: 100%; }
+.pwa-do-install[hidden] { display: none; }
+.pwa-modal-later { margin-top: 0; align-self: center; }
+
+@media (max-width: 480px) {
+  .pwa-nudge { right: 12px; bottom: 12px; padding: 10px 13px; font-size: 12.5px; }
+  .pwa-modal-card { padding: 22px 18px 18px; }
 }

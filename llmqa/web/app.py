@@ -362,6 +362,28 @@ if STATIC_DIR.exists():
     def about() -> FileResponse:
         return _page("about.html")
 
+    # --- PWA plumbing: served from the site root so the service worker can
+    # control the whole origin (scope "/") and the manifest resolves cleanly. ---
+    @app.get("/sw.js")
+    def service_worker() -> FileResponse:
+        # Allow the worker to claim the root scope even though the file lives
+        # under /static, and keep it uncached so updates ship immediately.
+        return FileResponse(
+            STATIC_DIR / "sw.js",
+            media_type="application/javascript",
+            headers={
+                "Service-Worker-Allowed": "/",
+                "Cache-Control": "no-cache",
+            },
+        )
+
+    @app.get("/manifest.webmanifest")
+    def manifest() -> FileResponse:
+        return FileResponse(
+            STATIC_DIR / "manifest.webmanifest",
+            media_type="application/manifest+json",
+        )
+
     @app.exception_handler(404)
     async def not_found(request, exc):  # noqa: ANN001
         # API 404s stay JSON. For a bare clean-URL that matches a known page

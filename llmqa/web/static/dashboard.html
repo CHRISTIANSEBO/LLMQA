@@ -19,6 +19,13 @@
 </script>
 <link rel="stylesheet" href="/assets/app.css" />
 <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg" />
+<link rel="manifest" href="/manifest.webmanifest" />
+<meta name="theme-color" content="#16150f" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="LLMQA" />
+<link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
 </head>
 <body>
 <a class="skip-link" href="#main">Skip to content</a>
@@ -37,6 +44,7 @@
     <a href="/dashboard" aria-current="page">Dashboard</a>
     <a href="/docs">Docs</a>
     <a href="/about">About</a>
+    <button type="button" id="pwaInstallNav" class="pwa-nav" hidden><span class="pwa-nav-ic" aria-hidden="true">⤓</span> Install app</button>
     <button type="button" id="theme-toggle" class="theme-toggle" aria-label="Switch to dark theme" title="Switch to dark theme" aria-pressed="false"><span class="tt-glyph" aria-hidden="true">☀</span></button>
     <a class="gh-star" href="https://github.com/CHRISTIANSEBO/LLMQA" target="_blank" rel="noopener" aria-label="Star LLMQA on GitHub">★ Star on GitHub</a>
   </nav>
@@ -219,5 +227,6 @@
 
 <script src="/assets/theme.js"></script>
 <script src="/assets/app.js"></script>
+<script src="/assets/pwa.js" defer></script>
 </body>
 </html>
