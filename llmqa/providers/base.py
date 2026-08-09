@@ -8,14 +8,9 @@ from concurrent.futures import TimeoutError as FuturesTimeout
 from dataclasses import dataclass
 
 from ..cache import CacheBackend, build_cache, cache_key
+from ..exceptions import MissingAPIKeyError, ProviderError
 
-
-class ProviderError(RuntimeError):
-    """Raised when a provider call fails after exhausting its retries.
-
-    Carries the underlying exception as ``__cause__`` so callers can inspect
-    the root cause (rate limit, timeout, auth, etc.).
-    """
+__all__ = ["ModelResponse", "Provider", "ProviderError", "MissingAPIKeyError"]
 
 
 @dataclass

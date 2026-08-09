@@ -159,6 +159,7 @@ python cli.py run [options]
   --regression-tolerance F   Allowed avg-score drop before failing (default: 0.05)
   --label LBL                Tag this stored run with a label (e.g. baseline)
 
+  -v, --verbose              Verbose logging on stderr (retries, cache hits, timings)
   --markdown PATH            Also write a Markdown report to PATH
   --junit PATH               Write a JUnit XML report to PATH (for CI test reporting)
   --github-annotations       Emit ::error:: annotations for failing cases (GitHub Actions)
@@ -167,6 +168,15 @@ python cli.py run [options]
   --no-cache                 Disable the response cache
   --cache-path FILE          Persist the response cache to this SQLite file
 ```
+
+### Errors & exit codes
+
+LLMQA fails loudly but cleanly. User-fixable problems (a missing/malformed
+dataset, an unset API key, a bad option) print a one-line `error: ...` on stderr
+and exit **2** instead of dumping a traceback; a failing quality/regression gate
+exits **1**; a clean pass exits **0**. Add `-v/--verbose` to see the full stack
+and debug logging (provider retries, cache hits, timings). `llmqa --version`
+prints the version.
 
 ### Determinism & reliability
 
