@@ -52,21 +52,77 @@
 
 <main id="main">
   <section class="page-head">
-    <p class="edition">Open source · MIT licensed</p>
+    <p class="edition">Open source · MIT licensed · v0.1</p>
     <h2 class="page-title">About LLMQA</h2>
     <p class="page-sub">LLMQA treats LLM quality the way engineering treats
       software quality: measurable, versioned, and gated. It exists so a model
       or prompt change can't silently degrade what you ship.</p>
+    <div class="lede-badges">
+      <span class="osbadge">MIT License</span>
+      <span class="osbadge">Python 3.11+</span>
+      <span class="osbadge">pip install llmqa</span>
+      <span class="osbadge">Provider-agnostic</span>
+      <a class="osbadge osbadge--cta" href="/dashboard">▶ Try the live dashboard</a>
+    </div>
   </section>
 
   <section class="panel">
     <h2>Why it exists</h2>
     <p class="prose">Shipping with LLMs means quality is a moving target — a new
       model version, a reworded prompt, or a fresh temperature setting can quietly
-      break behavior that used to work. LLMQA makes that regression <em>visible and
-      blockable</em>: define a golden dataset once, score every change against it,
-      and fail CI when quality drops. It's the automated version of the kind of
-      manual, case-by-case model evaluation that otherwise doesn't scale.</p>
+      break behavior that used to work. “Looks better” isn't a diff you can gate a
+      deploy on. LLMQA makes that regression <em>visible and blockable</em>:
+      define a golden dataset once, score every change against it, and fail CI
+      when quality drops. It's the automated version of the kind of manual,
+      case-by-case model evaluation that otherwise doesn't scale.</p>
+  </section>
+
+  <section class="panel">
+    <h2>Who it's for</h2>
+    <p class="prose">Anyone shipping a feature backed by an LLM — an app team
+      that reworded a prompt, a platform picking between models, or a library
+      author who needs a regression test for generated output. If you'd write a
+      unit test for a function, LLMQA is how you write one for a model.</p>
+  </section>
+
+  <section class="panel">
+    <h2>Three ways to run it</h2>
+    <ol class="steps">
+      <li>
+        <span class="step-n">1</span>
+        <div>
+          <strong>CLI.</strong> <code>pip install llmqa</code>, then
+          <code>llmqa run --provider mock</code>. Quality and regression gates
+          return real exit codes for any pipeline.
+        </div>
+      </li>
+      <li>
+        <span class="step-n">2</span>
+        <div>
+          <strong>Web dashboard.</strong> Pick a dataset, watch runs stream in
+          case by case, compare two providers, and track a quality trend — the
+          same app you're reading this in.
+        </div>
+      </li>
+      <li>
+        <span class="step-n">3</span>
+        <div>
+          <strong>GitHub Action.</strong> A reusable, drop-in composite Action
+          gates a pull request on quality, writes a JUnit report, and annotates
+          failing cases inline on the diff.
+        </div>
+      </li>
+    </ol>
+  </section>
+
+  <section class="panel">
+    <h2>What's included</h2>
+    <ul class="doc-list">
+      <li><strong>Six golden datasets (78 cases).</strong> Factual QA, summarization, RAG grounding, code QA, safety refusals, and a mixed baseline — each case declares which metric gates its pass/fail.</li>
+      <li><strong>Four metrics.</strong> Exact match, similarity, LLM-as-judge, and a hallucination/grounding check.</li>
+      <li><strong>Production runner.</strong> Parallel execution, per-call retries and timeouts, a cost ceiling, and a persistent response cache.</li>
+      <li><strong>Typed &amp; tested.</strong> Ships a <code>py.typed</code> marker, is type-checked with mypy, and CI runs the suite across Python 3.11–3.13.</li>
+    </ul>
   </section>
 
   <section class="panel">
@@ -76,6 +132,7 @@
       <li><strong>Provider-agnostic.</strong> Bring your own Anthropic, OpenAI, or xAI key for live evals — the harness doesn't care which model you test.</li>
       <li><strong>Reviewable.</strong> Every result is a readable table: per-case pass/fail, gating metric, latency, and cost.</li>
       <li><strong>CI-first.</strong> Quality gates and regression checks return real exit codes, so they actually stop a bad build.</li>
+      <li><strong>Extensible.</strong> Adding a dataset, metric, or provider is a small, documented change — see the <a href="https://github.com/CHRISTIANSEBO/LLMQA/blob/main/docs/extending.md" target="_blank" rel="noopener">extending guide</a>.</li>
     </ul>
   </section>
 
@@ -96,7 +153,7 @@
   </section>
 </main>
 
-<footer>LLMQA v0.2 · open-source LLM evaluation harness · MIT licensed · maintained by <a href="https://github.com/CHRISTIANSEBO" target="_blank" rel="noopener">@CHRISTIANSEBO</a></footer>
+<footer>LLMQA v0.1 · open-source LLM evaluation harness · MIT licensed · maintained by <a href="https://github.com/CHRISTIANSEBO" target="_blank" rel="noopener">@CHRISTIANSEBO</a></footer>
 <script src="/assets/theme.js"></script>
 <script src="/assets/pwa.js" defer></script>
 </body>

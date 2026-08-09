@@ -57,41 +57,63 @@
       <li><a href="#install">Install</a></li>
       <li><a href="#quickstart">Quickstart</a></li>
       <li><a href="#dataset">Golden dataset</a></li>
+      <li><a href="#datasets">Included datasets</a></li>
       <li><a href="#metrics">Metrics</a></li>
       <li><a href="#gates">Quality gates</a></li>
       <li><a href="#regression">Regression detection</a></li>
-      <li><a href="#ci">CI integration</a></li>
+      <li><a href="#ci">CI &amp; the Action</a></li>
+      <li><a href="#extend">Extend it</a></li>
       <li><a href="#api">HTTP API</a></li>
     </ul>
   </aside>
 
   <div class="docs-body">
     <section class="page-head">
-      <p class="edition">Documentation · v0.2</p>
+      <p class="edition">Documentation · v0.1</p>
       <h2 class="page-title">Docs</h2>
-      <p class="page-sub">Everything you need to run LLMQA locally, in CI, or as a
-        hosted dashboard. For the full reference, see the
+      <p class="page-sub">From zero to a gated pipeline in a few minutes. Run
+        LLMQA locally, in CI, or as this hosted dashboard — the mock provider is
+        free and deterministic, so you can follow along without an API key. For
+        the full reference, see the
         <a href="https://github.com/CHRISTIANSEBO/LLMQA#readme" target="_blank" rel="noopener">README on GitHub</a>.</p>
+      <div class="lede-badges">
+        <span class="osbadge">No API key needed</span>
+        <span class="osbadge">Python 3.11+</span>
+        <a class="osbadge osbadge--cta" href="#quickstart">▶ Jump to quickstart</a>
+      </div>
     </section>
 
     <section class="panel doc-section" id="install">
       <h2>Install</h2>
-      <p>LLMQA requires Python 3.11+. Install from source:</p>
+      <p>LLMQA requires Python 3.11+. Install from PyPI:</p>
+      <pre class="code"><code>pip install llmqa</code></pre>
+      <p class="hint">Optional extras: <code>llmqa[web]</code> for the dashboard,
+        <code>llmqa[providers]</code> for the live-model SDKs (Anthropic / OpenAI /
+        xAI), or <code>llmqa[all]</code> for everything. The core install needs no
+        API key.</p>
+      <p>Prefer to hack on it? Install from source:</p>
       <pre class="code"><code>git clone https://github.com/CHRISTIANSEBO/LLMQA.git
 cd LLMQA
 pip install -e ".[all]"</code></pre>
-      <p class="hint">Extras: <code>[providers]</code> for live-model SDKs,
-        <code>[web]</code> for the dashboard, <code>[dev]</code> for tests,
-        <code>[all]</code> for everything. Core install needs no API key.</p>
     </section>
 
     <section class="panel doc-section" id="quickstart">
       <h2>Quickstart</h2>
       <p>Run the built-in golden dataset through the deterministic mock provider —
         no API key needed:</p>
-      <pre class="code"><code>llmqa run --provider mock-strong</code></pre>
+      <pre class="code"><code>llmqa run --provider mock</code></pre>
       <p>You'll get a per-case pass/fail table with the gating metric highlighted,
-        plus an aggregate pass rate, average score, latency, and cost.</p>
+        plus an aggregate pass rate, average score, latency, and cost:</p>
+      <pre class="code"><code>LLMQA run: mock/mock-strong-1
+[PASS] capital-france   exact_match=1.00 similarity=1.00 llm_judge=1.00
+...
+pass rate : 100%  (20/20)
+avg score : 1.00
+cost      : $0.0000</code></pre>
+      <p class="hint">Point <code>--provider</code> at <code>anthropic</code>,
+        <code>openai</code>, or <code>xai</code> (with the matching key set) to
+        evaluate a real model. <code>llmqa --version</code> prints the version;
+        <code>-v</code> adds verbose logs.</p>
     </section>
 
     <section class="panel doc-section" id="dataset">
@@ -113,7 +135,31 @@ pip install -e ".[all]"</code></pre>
   gate_metrics: [llm_judge, hallucination]</code></pre>
       <p class="hint">Per-case <code>gate_metrics</code> is why a verbose-but-correct
         answer can still pass: a summary is gated on the judge, not on exact string
-        match.</p>
+        match. Cases can also declare <code>accept</code> (alternative answers),
+        <code>expected_regex</code>, or a numeric <code>tolerance</code>.</p>
+      <p>Save it anywhere and run it by path, or drop it in the packaged
+        <code>datasets/</code> folder and use it by name:</p>
+      <pre class="code"><code>llmqa run --provider mock --dataset path/to/your_dataset.yaml</code></pre>
+      <p class="hint">The full field reference is in
+        <a href="https://github.com/CHRISTIANSEBO/LLMQA/blob/main/datasets/dataset.schema.json" target="_blank" rel="noopener">dataset.schema.json</a>
+        — point your editor at it for autocomplete and validation.</p>
+    </section>
+
+    <section class="panel doc-section" id="datasets">
+      <h2>Included datasets</h2>
+      <p>Six tagged datasets ship in the box (78 cases total) so you have
+        something meaningful to run on day one:</p>
+      <ul class="doc-list">
+        <li><strong>qa_golden</strong> — mixed factual / math / JSON / RAG / adversarial baseline.</li>
+        <li><strong>factual_qa</strong> — closed-book facts, gated on exact match / similarity.</li>
+        <li><strong>summarization</strong> — passage to short summary, gated on the judge.</li>
+        <li><strong>rag_grounding</strong> — context-grounded QA, including “not in the context” cases.</li>
+        <li><strong>code_qa</strong> — Python, git, HTTP, SQL, and regex questions.</li>
+        <li><strong>safety_refusals</strong> — prompts a model should refuse, plus benign look-alikes.</li>
+      </ul>
+      <p class="hint">Switch datasets with the picker on the
+        <a href="/dashboard">dashboard</a>, or <code>--dataset code_qa.yaml</code>
+        on the CLI.</p>
     </section>
 
     <section class="panel doc-section" id="metrics">
@@ -144,14 +190,40 @@ llmqa run --provider mock-legacy --regression --regression-tolerance 0.05
     </section>
 
     <section class="panel doc-section" id="ci">
-      <h2>CI integration</h2>
-      <p>Drop the gate into any pipeline. Example GitHub Actions step:</p>
+      <h2>CI &amp; the GitHub Action</h2>
+      <p>Drop the gate into any pipeline in one line:</p>
       <pre class="code"><code>- name: LLM quality gate
   run: |
-    pip install -e ".[all]"
-    llmqa run --provider mock-strong --min-pass-rate 0.9</code></pre>
+    pip install llmqa
+    llmqa run --provider mock --min-pass-rate 0.9</code></pre>
+      <p>On GitHub, use the reusable composite Action instead — it runs the eval,
+        writes a JUnit report, and annotates failing cases inline on the diff:</p>
+      <pre class="code"><code>- name: LLMQA quality gate
+  uses: CHRISTIANSEBO/LLMQA@main
+  with:
+    provider: mock            # swap for openai/anthropic/xai on self-hosted runners
+    dataset: qa_golden.yaml
+    min-pass-rate: "0.8"
+    junit-path: llmqa-results.xml</code></pre>
       <p class="hint">Because the mock providers are deterministic and free, the
-        full gate runs in CI with no API key and no cost.</p>
+        full gate runs in CI with no API key and no cost. Exit codes:
+        <code>0</code> pass, <code>1</code> a gate failed, <code>2</code> a
+        config/dataset error.</p>
+    </section>
+
+    <section class="panel doc-section" id="extend">
+      <h2>Extend it</h2>
+      <p>Adding your own dataset, metric, or provider is a small, self-contained
+        change. Each is one file plus a line in a registry:</p>
+      <ul class="doc-list">
+        <li><strong>Datasets</strong> — a YAML/JSON list of cases (see the schema above).</li>
+        <li><strong>Metrics</strong> — subclass <code>Metric</code> and return a 0–1 score with a pass/fail.</li>
+        <li><strong>Providers</strong> — subclass <code>Provider</code> and implement one <code>_complete()</code> method; retries, timeouts, and the response cache come for free.</li>
+      </ul>
+      <p class="hint">Full walkthrough in the
+        <a href="https://github.com/CHRISTIANSEBO/LLMQA/blob/main/docs/extending.md" target="_blank" rel="noopener">extending guide</a>,
+        with runnable scripts in
+        <a href="https://github.com/CHRISTIANSEBO/LLMQA/tree/main/examples" target="_blank" rel="noopener">examples/</a>.</p>
     </section>
 
     <section class="panel doc-section" id="api">
@@ -170,7 +242,7 @@ llmqa run --provider mock-legacy --regression --regression-tolerance 0.05
   </div>
 </main>
 
-<footer>LLMQA v0.2 · open-source LLM evaluation harness · MIT licensed · maintained by <a href="https://github.com/CHRISTIANSEBO" target="_blank" rel="noopener">@CHRISTIANSEBO</a></footer>
+<footer>LLMQA v0.1 · open-source LLM evaluation harness · MIT licensed · maintained by <a href="https://github.com/CHRISTIANSEBO" target="_blank" rel="noopener">@CHRISTIANSEBO</a></footer>
 <script src="/assets/theme.js"></script>
 <script src="/assets/pwa.js" defer></script>
 </body>
