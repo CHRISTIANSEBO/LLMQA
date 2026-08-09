@@ -1,5 +1,6 @@
 # LLMQA: LLM Quality Assurance
 
+[![PyPI](https://img.shields.io/pypi/v/llmqa)](https://pypi.org/project/llmqa/)
 [![live demo (mock)](https://img.shields.io/badge/live%20demo-mock-brightgreen)](https://llmqa-production.up.railway.app/)
 [![tests](https://github.com/CHRISTIANSEBO/LLMQA/actions/workflows/tests.yml/badge.svg)](https://github.com/CHRISTIANSEBO/LLMQA/actions/workflows/tests.yml)
 [![python](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org/)
@@ -24,11 +25,21 @@ Prompt and model changes are hard to review. "Looks better" is not a diff you ca
 ## Quickstart
 
 ```bash
-python3 -m venv .venv && source .venv/bin/activate
-pip install -e ".[web,dev]"
+pip install llmqa
 
 # Run the full suite against the free, deterministic mock provider
-python cli.py run --provider mock       # or `llmqa run --provider mock` after install
+llmqa run --provider mock
+```
+
+Optional extras: `pip install "llmqa[web]"` for the dashboard, `"llmqa[providers]"`
+for real Anthropic/OpenAI/xAI models, or `"llmqa[all]"` for everything. To hack on
+LLMQA itself, install from source (see [Contributing](#contributing)):
+
+```bash
+git clone https://github.com/CHRISTIANSEBO/LLMQA && cd LLMQA
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e ".[all]"
+llmqa run --provider mock       # or `python cli.py run --provider mock`
 ```
 
 ```
@@ -49,8 +60,8 @@ LLMQA ships with a FastAPI and vanilla-JS dashboard: pick a dataset, trigger run
 ![LLMQA dashboard demo](docs/demo.gif)
 
 ```bash
-pip install -e ".[web]"
-python server.py            # http://localhost:8000
+pip install "llmqa[web]"
+python -m llmqa.web         # http://localhost:8000  (or `python server.py` from source)
 # Self-hosted only: set any of these to enable a real provider in the UI:
 export ANTHROPIC_API_KEY=...
 export OPENAI_API_KEY=...

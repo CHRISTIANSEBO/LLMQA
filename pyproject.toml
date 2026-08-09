@@ -66,6 +66,8 @@ llmqa = "cli:main"
 [tool.hatch.build.targets.wheel]
 # The importable package plus the top-level CLI module and the golden dataset.
 packages = ["llmqa"]
+# Ship the PEP 561 marker so downstream type checkers see llmqa's type hints.
+artifacts = ["llmqa/py.typed"]
 include = [
     "cli.py",
     "server.py",
@@ -106,6 +108,7 @@ ignore = ["E501", "B008"]
 # that read env at import time, so their imports aren't at the very top.
 "cli.py" = ["E402"]
 "server.py" = ["E402"]
+"llmqa/web/__main__.py" = ["E402"]
 
 # pytest is configured in pytest.ini (it defines python_classes + pythonpath).
 
