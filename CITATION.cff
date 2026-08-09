@@ -1,0 +1,23 @@
+cff-version: 1.2.0
+message: "If you use LLMQA in your work, please cite it as below."
+title: "LLMQA: LLM Quality Assurance"
+abstract: >-
+  An open-source harness that makes LLM quality measurable, reviewable, and
+  gate-able in CI: golden datasets, pluggable metrics (exact match, similarity,
+  LLM-as-judge, hallucination/grounding), and quality + regression gates.
+type: software
+authors:
+  - family-names: Sebo
+    given-names: Christian
+repository-code: "https://github.com/CHRISTIANSEBO/LLMQA"
+url: "https://github.com/CHRISTIANSEBO/LLMQA"
+license: MIT
+version: "0.1.0"
+keywords:
+  - llm
+  - evaluation
+  - quality-assurance
+  - testing
+  - ci
+  - regression
+  - llm-as-judge

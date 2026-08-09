@@ -108,6 +108,8 @@ Six datasets ship in `datasets/` (78 cases total). Each case declares which metr
 
 Pick a dataset in the dashboard's Dataset dropdown, or with `--dataset` on the CLI (a packaged name like `code_qa.yaml`, or a path to your own file). Every run records a short content hash of the dataset (`dataset_hash`) so the trend and regression views can tell when a score change is really an apples-to-oranges comparison.
 
+**Bring your own dataset.** A dataset is a YAML/JSON list of cases; the full schema is [`datasets/dataset.schema.json`](datasets/dataset.schema.json) (point your editor at it for autocomplete/validation). See [docs/extending.md](docs/extending.md) for a walkthrough and [`examples/`](examples/) for runnable scripts (custom dataset, provider comparison, a custom provider).
+
 ## Provider tiers and real models
 
 The key-free mocks simulate models of different quality, so CI, offline demos, and the regression/trend views are meaningful without an API key:

@@ -1,0 +1,28 @@
+# A tiny hand-written golden dataset. Validate against
+# ../datasets/dataset.schema.json. Run it with custom_dataset.py, or:
+#   llmqa run --provider mock --dataset examples/custom_dataset.yaml
+- id: capital-france
+  input: "What is the capital of France?"
+  expected: "Paris"
+  tags: ["geography"]
+  gate_metrics: ["exact_match"]
+
+- id: capital-usa
+  input: "What is the capital of the United States? One word."
+  expected: "Washington"
+  accept: ["Washington, D.C.", "D.C."]
+  tags: ["geography"]
+  gate_metrics: ["exact_match"]
+
+- id: apollo-year
+  input: "In what year did Apollo 11 land on the Moon?"
+  expected: "1969"
+  expected_regex: "\\b1969\\b"
+  tags: ["history"]
+
+- id: grounded-founding
+  input: "According to the passage, in what year was Acme Corp founded?"
+  context: "Acme Corp was founded in 1998 in Denver, Colorado."
+  expected: "1998"
+  tags: ["rag", "grounding"]
+  gate_metrics: ["hallucination"]

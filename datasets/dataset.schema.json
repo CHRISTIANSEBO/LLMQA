@@ -1,0 +1,64 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/CHRISTIANSEBO/LLMQA/blob/main/datasets/dataset.schema.json",
+  "title": "LLMQA dataset",
+  "description": "A golden dataset is a YAML (or JSON) list of test cases. Each case is a prompt with an expected answer and optional flexible-matching and per-case gating hints. See docs/extending.md for a walkthrough.",
+  "type": "array",
+  "items": { "$ref": "#/$defs/testCase" },
+  "$defs": {
+    "testCase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "input", "expected"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Unique, stable identifier for the case (used in reports and single-case re-runs)."
+        },
+        "input": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The prompt sent to the model."
+        },
+        "expected": {
+          "type": "string",
+          "description": "The reference/golden answer. Primary target for exact_match and similarity."
+        },
+        "context": {
+          "type": ["string", "null"],
+          "description": "Optional grounding passage. Enables the hallucination/grounding metric; cases without context are N/A for it."
+        },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Freeform labels used for --tags filtering and per-tag pass-rate gates.",
+          "default": []
+        },
+        "gate_metrics": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["exact_match", "similarity", "llm_judge", "hallucination"]
+          },
+          "description": "Metric(s) that decide this case's pass/fail. Others are still scored but informational. Empty means every metric must pass.",
+          "default": []
+        },
+        "accept": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Additional acceptable exact answers (any counts as a full match), e.g. ['USA', 'United States'].",
+          "default": []
+        },
+        "expected_regex": {
+          "type": ["string", "null"],
+          "description": "If set, the output matches when this regular expression is found in it (format checks without pinning an exact string)."
+        },
+        "tolerance": {
+          "type": ["number", "null"],
+          "description": "For numeric answers, allow the output to differ from `expected` by up to this absolute tolerance."
+        }
+      }
+    }
+  }
+}
