@@ -282,6 +282,9 @@ main { max-width: 1040px; margin: 0 auto; padding: 30px 22px 60px; }
   padding-bottom: 8px; border-bottom: 1px solid var(--rule);
 }
 .hint { margin: -6px 0 16px; color: var(--muted); font-size: 12.5px; font-style: italic; }
+/* After a list the negative top margin collides with the last bullet; give it
+   room to breathe (the default -6px is tuned for following a code block). */
+.doc-list + .hint { margin-top: 10px; }
 
 /* ---- Empty state (shown before the first run; always-fresh start) ---- */
 .empty-state { text-align: center; padding: 40px 24px 44px; }
