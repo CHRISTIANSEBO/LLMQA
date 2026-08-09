@@ -12,6 +12,7 @@ Examples:
 from __future__ import annotations
 
 import argparse
+import logging
 import sys
 from pathlib import Path
 
@@ -19,12 +20,33 @@ from dotenv import load_dotenv
 
 load_dotenv()  # load .env if present
 
+from llmqa import __version__
 from llmqa.catalog import resolve_cli_dataset
+from llmqa.exceptions import LLMQAError
 from llmqa.metrics import build_metric
 from llmqa.providers import get_provider
 from llmqa.report import to_console, to_junit, to_markdown
 from llmqa.runner import run_eval
 from llmqa.store import latest_run, save_run
+
+log = logging.getLogger("llmqa")
+
+
+def _configure_logging(verbose: bool) -> None:
+    """Opt-in structured logging. Quiet by default so normal output is clean.
+
+    ``--verbose`` (or ``LLMQA_LOG_LEVEL=DEBUG``) surfaces provider retries,
+    cache hits, and timings on stderr; the report itself still goes to stdout.
+    """
+    import os
+
+    level_name = "DEBUG" if verbose else os.environ.get("LLMQA_LOG_LEVEL", "WARNING")
+    level = getattr(logging, level_name.upper(), logging.WARNING)
+    logging.basicConfig(
+        level=level,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+        stream=sys.stderr,
+    )
 
 
 def _parse_kv(pairs: list[str] | None, *, kind: str) -> dict[str, float]:
@@ -42,6 +64,8 @@ def _parse_kv(pairs: list[str] | None, *, kind: str) -> dict[str, float]:
 
 
 def cmd_run(args: argparse.Namespace) -> int:
+    _configure_logging(getattr(args, "verbose", False))
+    log.debug("starting run: provider=%s dataset=%s", args.provider, args.dataset)
     provider = get_provider(
         args.provider,
         use_cache=not args.no_cache,
@@ -184,9 +208,12 @@ def _evaluate_gates(run, args, baseline) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="llmqa", description="LLM Quality Assurance harness")
+    p.add_argument("--version", action="version", version=f"llmqa {__version__}")
     sub = p.add_subparsers(dest="command", required=True)
 
     r = sub.add_parser("run", help="Run an evaluation")
+    r.add_argument("-v", "--verbose", action="store_true",
+                   help="Verbose logging on stderr (retries, cache hits, timings)")
     r.add_argument("--dataset", default="qa_golden.yaml",
                    help="A dataset file path, or a name in the packaged datasets/ dir")
     r.add_argument("--provider", default="mock",
@@ -246,7 +273,18 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    return args.func(args)
+    try:
+        return args.func(args)
+    except LLMQAError as exc:
+        # User-fixable problems (bad dataset, missing key, bad config): show a
+        # clean one-line message, not a traceback. Use --verbose for the stack.
+        print(f"error: {exc}", file=sys.stderr)
+        if getattr(args, "verbose", False):
+            raise
+        return 2
+    except KeyboardInterrupt:
+        print("\ninterrupted", file=sys.stderr)
+        return 130
 
 
 if __name__ == "__main__":

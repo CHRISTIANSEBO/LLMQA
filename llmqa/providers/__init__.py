@@ -1,7 +1,7 @@
 """Pluggable model providers. Select by name via get_provider()."""
 from __future__ import annotations
 
-from .base import ModelResponse, Provider, ProviderError
+from .base import MissingAPIKeyError, ModelResponse, Provider, ProviderError
 from .mock import (
     MockLegacyProvider,
     MockLiteProvider,
@@ -76,6 +76,7 @@ __all__ = [
     "Provider",
     "ModelResponse",
     "ProviderError",
+    "MissingAPIKeyError",
     "MockProvider",
     "MockStrongProvider",
     "MockLiteProvider",

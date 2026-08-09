@@ -7,16 +7,64 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import yaml
+from pydantic import ValidationError
 
 from .catalog import dataset_hash
+from .exceptions import DatasetError
 from .metrics import Metric
 from .providers import Provider
 from .types import CaseResult, EvalRun, TestCase
 
 
 def load_dataset(path: str | Path) -> list[TestCase]:
-    raw = yaml.safe_load(Path(path).read_text())
-    return [TestCase(**item) for item in raw]
+    """Load and validate a dataset file into TestCase objects.
+
+    Raises :class:`DatasetError` with an actionable message when the file is
+    missing, isn't valid YAML/JSON, isn't a list of cases, or a case fails
+    validation, instead of surfacing a raw traceback.
+    """
+    p = Path(path)
+    try:
+        text = p.read_text()
+    except FileNotFoundError as exc:
+        raise DatasetError(
+            f"Dataset not found: {p}. Pass a path to a YAML/JSON file, or a "
+            f"packaged dataset name (e.g. qa_golden.yaml)."
+        ) from exc
+    except OSError as exc:
+        raise DatasetError(f"Could not read dataset {p}: {exc}") from exc
+
+    try:
+        raw = yaml.safe_load(text)
+    except yaml.YAMLError as exc:
+        raise DatasetError(f"Dataset {p} is not valid YAML/JSON: {exc}") from exc
+
+    if not isinstance(raw, list):
+        got = type(raw).__name__
+        raise DatasetError(
+            f"Dataset {p} must be a list of cases, got {got}. "
+            f"See datasets/dataset.schema.json."
+        )
+
+    cases: list[TestCase] = []
+    for i, item in enumerate(raw):
+        if not isinstance(item, dict):
+            raise DatasetError(
+                f"Dataset {p}: case #{i + 1} must be a mapping, got "
+                f"{type(item).__name__}."
+            )
+        try:
+            cases.append(TestCase(**item))
+        except ValidationError as exc:
+            cid = item.get("id", f"#{i + 1}")
+            raise DatasetError(
+                f"Dataset {p}: case {cid!r} is invalid: {exc.errors()[0]['msg']} "
+                f"(field: {'.'.join(str(x) for x in exc.errors()[0]['loc']) or '?'}). "
+                f"See datasets/dataset.schema.json."
+            ) from exc
+    if not cases:
+        raise DatasetError(f"Dataset {p} is empty (no cases).")
+    return cases
 
 
 def _eval_case(case: TestCase, provider: Provider, metrics: list[Metric]) -> tuple[CaseResult, float]:

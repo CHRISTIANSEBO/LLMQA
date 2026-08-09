@@ -10,6 +10,8 @@ from __future__ import annotations
 import hashlib
 from pathlib import Path
 
+from .exceptions import DatasetError
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DATASETS_DIR = REPO_ROOT / "datasets"
 DEFAULT_DATASET_NAME = "qa_golden.yaml"
@@ -53,7 +55,7 @@ def resolve_cli_dataset(name_or_path: str, directory: str | Path = DATASETS_DIR)
     candidate = Path(directory) / Path(name_or_path).name
     if candidate.is_file():
         return str(candidate)
-    raise FileNotFoundError(
+    raise DatasetError(
         f"Dataset {name_or_path!r} not found (looked for a file at that path and "
         f"for that name in {directory}). Available: {', '.join(list_datasets(directory)) or 'none'}"
     )

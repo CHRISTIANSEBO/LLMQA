@@ -57,7 +57,8 @@ class OpenAIProvider(Provider):
         super().__init__(use_cache=use_cache)
         api_key = os.environ.get(self._api_key_env)
         if not api_key:
-            raise RuntimeError(
+            from .base import MissingAPIKeyError
+            raise MissingAPIKeyError(
                 f"{self._api_key_env} is not set. Use --provider mock for a key-free run."
             )
         import openai  # imported lazily so 'mock' runs without the dep

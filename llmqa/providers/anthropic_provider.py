@@ -21,7 +21,8 @@ class AnthropicProvider(Provider):
         super().__init__(use_cache=use_cache)
         api_key = os.environ.get("ANTHROPIC_API_KEY")
         if not api_key:
-            raise RuntimeError(
+            from .base import MissingAPIKeyError
+            raise MissingAPIKeyError(
                 "ANTHROPIC_API_KEY is not set. Use --provider mock for a key-free run."
             )
         import anthropic  # imported lazily so 'mock' runs without the dep

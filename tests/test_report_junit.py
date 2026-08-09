@@ -46,8 +46,9 @@ def test_resolve_cli_dataset_by_name_and_path(tmp_path):
     f = tmp_path / "custom.yaml"
     f.write_text("- {id: x, input: q, expected: a, tags: [t], gate_metrics: [exact_match]}\n")
     assert resolve_cli_dataset(str(f)) == str(f)
+    from llmqa.exceptions import DatasetError
     try:
         resolve_cli_dataset("does-not-exist.yaml")
-        assert False, "expected FileNotFoundError"
-    except FileNotFoundError:
+        assert False, "expected DatasetError"
+    except DatasetError:
         pass
