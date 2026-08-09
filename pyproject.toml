@@ -112,6 +112,13 @@ ignore = ["E501", "B008"]
 
 # pytest is configured in pytest.ini (it defines python_classes + pythonpath).
 
+[tool.mypy]
+python_version = "3.11"
+# Third-party SDKs (anthropic/openai/uvicorn/...) don't all ship stubs; don't
+# fail on their missing imports. The harness itself is checked normally.
+ignore_missing_imports = true
+files = ["llmqa"]
+
 [tool.coverage.run]
 source = ["llmqa", "cli"]
 omit = ["tests/*", ".venv/*"]

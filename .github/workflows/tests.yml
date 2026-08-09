@@ -21,6 +21,9 @@ jobs:
       - name: Ruff lint
         run: ruff check .
 
+      - name: Mypy type check
+        run: mypy
+
   test:
     runs-on: ubuntu-latest
     strategy:
@@ -41,7 +44,15 @@ jobs:
           pip install -r requirements-dev.txt
 
       - name: Run unit + web tests with coverage gate
-        run: pytest tests/ -v --cov --cov-report=term-missing
+        run: pytest tests/ -v --cov --cov-report=term-missing --cov-report=xml
+
+      - name: Upload coverage to Codecov
+        # Only once (3.12) to avoid duplicate uploads across the matrix.
+        if: matrix.python-version == '3.12'
+        uses: codecov/codecov-action@v4
+        with:
+          files: coverage.xml
+          fail_ci_if_error: false
 
       - name: Self-eval quality gate (mock provider)
         run: python cli.py run --provider mock --min-pass-rate 0.8 --no-store

@@ -1,0 +1,27 @@
+# Run the LLMQA dashboard locally:
+#   docker compose up --build      # -> http://localhost:8000  (mock-only)
+#
+# To enable real providers, copy .env.example to .env, set your key(s) and
+# LLMQA_ALLOW_REAL_PROVIDERS=1; compose reads .env automatically. The named
+# volume persists run history and the response cache across restarts.
+services:
+  llmqa:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file:
+      # Optional: only loaded if you created it (see .env.example). Compose won't
+      # error when it's absent.
+      - path: .env
+        required: false
+    environment:
+      PORT: "8000"
+      # Persist run history + cache onto the mounted volume.
+      LLMQA_DB: /data/llmqa_runs.db
+      LLMQA_CACHE: /data/llmqa_cache.db
+    volumes:
+      - llmqa-data:/data
+    restart: unless-stopped
+
+volumes:
+  llmqa-data:

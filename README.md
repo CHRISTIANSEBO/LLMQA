@@ -3,6 +3,7 @@
 [![PyPI](https://img.shields.io/pypi/v/llmqa)](https://pypi.org/project/llmqa/)
 [![live demo (mock)](https://img.shields.io/badge/live%20demo-mock-brightgreen)](https://llmqa-production.up.railway.app/)
 [![tests](https://github.com/CHRISTIANSEBO/LLMQA/actions/workflows/tests.yml/badge.svg)](https://github.com/CHRISTIANSEBO/LLMQA/actions/workflows/tests.yml)
+[![coverage](https://codecov.io/gh/CHRISTIANSEBO/LLMQA/branch/main/graph/badge.svg)](https://codecov.io/gh/CHRISTIANSEBO/LLMQA)
 [![python](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org/)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
