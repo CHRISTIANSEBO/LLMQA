@@ -71,7 +71,7 @@ def save_run(run: EvalRun, db_path: str | Path = DEFAULT_DB, label: str | None =
             ),
         )
         conn.commit()
-        return cur.lastrowid
+        return int(cur.lastrowid or 0)
     finally:
         conn.close()
 

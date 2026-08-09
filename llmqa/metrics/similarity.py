@@ -14,6 +14,7 @@ from __future__ import annotations
 import math
 import os
 import re
+from typing import Any
 
 from ..types import MetricResult, TestCase
 from .base import Metric
@@ -54,7 +55,7 @@ class SimilarityMetric(Metric):
         super().__init__(threshold)
         self.backend = (backend or os.environ.get("LLMQA_SIMILARITY", "jaccard")).lower()
         self.embedding_model = embedding_model
-        self._client = None  # lazy embeddings client
+        self._client: Any = None  # lazy embeddings client (openai.OpenAI)
 
     # -- embeddings backend --------------------------------------------------
     def _embed(self, texts: list[str]) -> list[list[float]] | None:
