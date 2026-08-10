@@ -118,6 +118,7 @@
       <div class="dl-btns">
         <button id="dl-md" class="mini-btn" type="button" title="Download this run as Markdown">↓ Markdown</button>
         <button id="dl-json" class="mini-btn" type="button" title="Download this run as JSON">↓ JSON</button>
+        <button id="dl-junit" class="mini-btn" type="button" title="Download this run as JUnit XML (for CI test reporting)">↓ JUnit</button>
       </div>
     </div>
     <p id="verdict" class="verdict" hidden></p>
@@ -128,7 +129,7 @@
       <span class="mid"><span class="g">✓</span> pass (marginal) · passed but score &lt; 0.80</span>
       <span class="fail"><span class="g">✕</span> fail · score &lt; the metric's threshold</span>
     </div>
-    <div class="table-wrap">
+    <div class="table-wrap" aria-live="polite" aria-relevant="additions" aria-busy="false">
       <table id="results">
         <thead><tr><th>Case</th><th>Result</th><th>Tags</th><th>Latency</th><th class="metric-cols">Metrics</th></tr></thead>
         <tbody></tbody>

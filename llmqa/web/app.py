@@ -24,12 +24,19 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from .. import __version__
 from ..catalog import list_datasets, resolve_dataset_name
+from ..exceptions import ConfigError, DatasetError, LLMQAError, MissingAPIKeyError
 from ..metrics import REGISTRY, build_metric
 from ..providers import MOCK_PROVIDERS, get_provider
 from ..runner import iter_eval, load_dataset, run_eval
 from ..store import get_run, list_runs, save_run
-from .security import check_provider_allowed, guard_mutation
+from .security import (
+    SecurityHeadersMiddleware,
+    check_provider_allowed,
+    enforce_body_limit,
+    guard_mutation,
+)
 
 ROOT = Path(__file__).resolve().parent
 STATIC_DIR = ROOT / "static"
@@ -49,7 +56,9 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(
     title="LLMQA Dashboard",
     description="LLM Quality Assurance — run evaluations and track quality over time.",
-    version="0.2.0",
+    # Single source of truth: the installed package version (llmqa.__version__),
+    # so /api/health and the OpenAPI spec never drift from the package.
+    version=__version__,
     lifespan=lifespan,
     # The site uses /docs for its own documentation page, so move the
     # auto-generated OpenAPI UIs out of the way.
@@ -72,6 +81,25 @@ if _origins:
         allow_methods=["GET", "POST"],
         allow_headers=["Authorization", "Content-Type", "X-API-Token"],
     )
+
+# Baseline security headers on every response (CSP, nosniff, referrer policy,
+# frame-deny, and HSTS behind TLS). Cheap hardening for a public deploy; see
+# SecurityHeadersMiddleware for the exact policy and its env overrides.
+app.add_middleware(SecurityHeadersMiddleware)
+
+
+def _http_from_llmqa_error(exc: LLMQAError) -> HTTPException:
+    """Map a typed LLMQA error to the right HTTP status.
+
+    User-fixable problems (missing key, bad config, bad dataset) are 4xx; any
+    other LLMQAError is a 500. Avoids the previous blanket ``except Exception``
+    that turned genuine server faults into a misleading 400.
+    """
+    if isinstance(exc, MissingAPIKeyError):
+        return HTTPException(status_code=400, detail=str(exc))
+    if isinstance(exc, (ConfigError, DatasetError)):
+        return HTTPException(status_code=400, detail=str(exc))
+    return HTTPException(status_code=500, detail=str(exc))
 
 
 # Provider instances are reused across requests so the in-memory response
@@ -149,7 +177,7 @@ def health() -> dict:
 
 
 @app.get("/api/config")
-def config(dataset: str | None = None) -> dict:
+def config(dataset: str | None = None, include_context: bool = False) -> dict:
     dataset_path = resolve_dataset_name(dataset)
     cases = load_dataset(dataset_path)
 
@@ -168,13 +196,36 @@ def config(dataset: str | None = None) -> dict:
         "dataset": Path(dataset_path).name,
         "datasets": list_datasets(),
         "default_dataset": Path(DEFAULT_DATASET).name,
+        # Context can be large (grounding passages), so it's omitted here and
+        # served per-case via /api/runs detail / the row drill-down. `has_context`
+        # is enough for the UI to show the right badge. Pass include_context=1
+        # to opt back into the full payload.
         "cases": [
             {"id": c.id, "input": c.input, "expected": c.expected,
              "tags": c.tags, "has_context": bool(c.context),
-             "context": c.context, "gate_metrics": c.gate_metrics}
+             "gate_metrics": c.gate_metrics,
+             **({"context": c.context} if include_context else {})}
             for c in cases
         ],
     }
+
+
+@app.get("/api/cases/{case_id}")
+def case_detail(case_id: str, dataset: str | None = None) -> dict:
+    """Full detail for one case, including its (possibly large) context.
+
+    /api/config omits context by default to keep the initial payload small;
+    the dashboard fetches this lazily when a result row is expanded.
+    """
+    dataset_path = resolve_dataset_name(dataset)
+    for c in load_dataset(dataset_path):
+        if c.id == case_id:
+            return {
+                "id": c.id, "input": c.input, "expected": c.expected,
+                "tags": c.tags, "has_context": bool(c.context),
+                "context": c.context, "gate_metrics": c.gate_metrics,
+            }
+    raise HTTPException(status_code=404, detail=f"Case {case_id!r} not found")
 
 
 @app.get("/api/history")
@@ -191,7 +242,8 @@ def run_detail(run_id: int) -> dict:
 
 
 @app.post("/api/run")
-def run(req: RunRequest, request: Request) -> dict:
+async def run(req: RunRequest, request: Request) -> dict:
+    await enforce_body_limit(request)
     guard_mutation(request, provider=req.provider)
     if req.provider == "anthropic" and not os.environ.get("ANTHROPIC_API_KEY"):
         raise HTTPException(
@@ -200,8 +252,8 @@ def run(req: RunRequest, request: Request) -> dict:
         )
     try:
         provider = _get_cached_provider(req.provider)
-    except Exception as exc:  # pragma: no cover - defensive
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except LLMQAError as exc:
+        raise _http_from_llmqa_error(exc) from exc
 
     metrics = []
     for name in req.metrics:
@@ -236,7 +288,7 @@ def run(req: RunRequest, request: Request) -> dict:
 
 
 @app.post("/api/run/stream")
-def run_stream(req: RunRequest, request: Request):
+async def run_stream(req: RunRequest, request: Request):
     """Stream case results via Server-Sent Events as each case completes.
 
     Each SSE event is JSON with a ``type`` field:
@@ -246,8 +298,8 @@ def run_stream(req: RunRequest, request: Request):
     guard_mutation(request, provider=req.provider)
     try:
         provider = _get_cached_provider(req.provider)
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except LLMQAError as exc:
+        raise _http_from_llmqa_error(exc) from exc
 
     metrics: list = []
     for name in req.metrics:
@@ -264,6 +316,9 @@ def run_stream(req: RunRequest, request: Request):
     conc = _clamp_concurrency(req.concurrency)
 
     def _event_gen():
+        # Open with a comment line so proxies flush headers immediately and the
+        # client's reader starts before the first (possibly slow) case.
+        yield ": llmqa stream open\n\n"
         run = None
         for run, cr in iter_eval(  # noqa: B007 - keep last run
             dataset_path, provider, metrics, req.tags, req.case_ids,
@@ -271,6 +326,9 @@ def run_stream(req: RunRequest, request: Request):
         ):
             case_data = cr.model_dump()
             case_data["passed"] = cr.passed
+            # A heartbeat comment before each case keeps idle proxies from
+            # closing the connection during a long gap between slow cases.
+            yield ": ping\n\n"
             yield f"data: {_json.dumps({'type': 'case', 'result': case_data})}\n\n"
 
         run_id = save_run(run, DB_PATH) if (store and run is not None) else None
@@ -293,9 +351,10 @@ def run_stream(req: RunRequest, request: Request):
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 @app.post("/api/compare")
-def compare(req: CompareRequest, request: Request) -> dict:
+async def compare(req: CompareRequest, request: Request) -> dict:
     """Run the same dataset through multiple providers and return all results
     keyed by provider name for side-by-side comparison."""
+    await enforce_body_limit(request)
     guard_mutation(request)
     for prov_name in req.providers:
         check_provider_allowed(prov_name)
@@ -305,8 +364,8 @@ def compare(req: CompareRequest, request: Request) -> dict:
     for prov_name in req.providers:
         try:
             provider = _get_cached_provider(prov_name)
-        except Exception as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except LLMQAError as exc:
+            raise _http_from_llmqa_error(exc) from exc
 
         metrics = []
         for name in req.metrics:
