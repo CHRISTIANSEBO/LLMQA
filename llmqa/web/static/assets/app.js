@@ -1700,12 +1700,13 @@ function svgToPng(svg, filename, scale = 2) {
 // 60-second guided tour
 // =====================================================================
 const TOUR = [
-  { sel: "#provider", tab: "run", title: "Pick a provider", body: "Choose which model runs the golden dataset. This demo ships deterministic mock providers so results are free and reproducible \u2014 no API key." },
-  { sel: "#metrics", tab: "run", title: "Choose your metrics", body: "Each metric scores an answer differently: exact match, similarity, an LLM judge, and a hallucination check. Toggle whichever you care about." },
-  { sel: "#runBtn", tab: "run", title: "Run the evaluation", body: "Cases stream back one at a time. Watch the progress bar tally passes and fails live as the run completes." },
-  { sel: "#resultsEmpty", tab: "results", title: "Read the results", body: "The bold metric is the one that gates a case's pass/fail. Click any row to see the input, model output, and expected answer \u2014 or re-run a single case." },
-  { sel: "#comparePanel", tab: "compare", title: "Compare providers", body: "Run two providers over the same golden cases and see exactly where they diverge, case by case." },
-  { sel: "#trend", tab: "history", title: "Track quality over time", body: "Every stored run feeds the trend chart. Drag any two runs into the diff slots to see exactly which cases flipped." },
+  { sel: "#dataset", tab: "run", title: "Choose a dataset", body: "Pick the golden cases (qa_golden is the built-in demo set). You can also validate your own datasets in the Validate tab." },
+  { sel: "#provider", tab: "run", title: "Pick a provider", body: "Mock providers are free and deterministic. Real providers (OpenAI, Anthropic, xAI) use keys you supply." },
+  { sel: "#metrics", tab: "run", title: "Select metrics", body: "exact_match, similarity, llm_judge, hallucination. Toggle any combination; the gate metric(s) decide pass/fail." },
+  { sel: "#runBtn", tab: "run", title: "Run the evaluation", body: "Cases stream live. Watch the progress bar, pass/fail counts, and live cost meter update as results arrive." },
+  { sel: "#resultsEmpty", tab: "results", title: "Results view", body: "After running you get KPI cards, per-metric breakdown, search/filters, exports, and clickable rows for full case details (rationale, diffs)." },
+  { sel: ".hist-compare", tab: "history", title: "History & trend + diff", body: "All runs are saved. Use the ⇄ diff buttons on rows (or drag into the A/B slots) to compare any two runs and see what flipped." },
+  { sel: "#validatePanel", tab: "validate", title: "Validate a dataset", body: "Paste or upload your own YAML/JSON golden dataset here and check it against the schema (same checks the CLI uses) before committing it." },
 ];
 let _tourIdx = 0;
 
@@ -1759,20 +1760,26 @@ function stepTour(dir) {
 function showTourStep() {
   const step = TOUR[_tourIdx];
   if (step.tab) switchTab(step.tab);
-  const target = document.querySelector(step.sel);
   $("#tour-step").textContent = `Step ${_tourIdx + 1} of ${TOUR.length}`;
   $("#tour-title").textContent = step.title;
   $("#tour-body").textContent = step.body;
   $("#tour-prev").disabled = _tourIdx === 0;
   $("#tour-next").textContent = _tourIdx === TOUR.length - 1 ? "Done" : "Next";
+
+  // After switching tabs, the target may be inside a just-unhidden panel.
+  // Give the DOM + CSS a moment, then locate and spotlight if possible.
   const tip = $("#tip");
-  if (target && tip) {
-    target.scrollIntoView({ behavior: "smooth", block: "center" });
-    // Position after the smooth scroll settles so the ring lands correctly.
-    setTimeout(() => positionTour(target), 200);
-  } else if (tip) {
-    tip.hidden = true;
-  }
+  setTimeout(() => {
+    const target = document.querySelector(step.sel);
+    const panel = target ? target.closest(".tabpanel") : null;
+    const panelHidden = panel && panel.hasAttribute("hidden");
+    if (target && tip && !panelHidden) {
+      target.scrollIntoView({ behavior: "smooth", block: "center" });
+      setTimeout(() => positionTour(target), 220);
+    } else if (tip) {
+      tip.hidden = true;
+    }
+  }, 90);
 }
 
 // Place the spotlight ring over the target and move the bubble to whichever
