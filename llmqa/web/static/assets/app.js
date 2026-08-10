@@ -479,16 +479,14 @@ function updateHashTab(name) {
 function initTabs() {
   const bar = document.getElementById("tabbar");
   if (!bar) return;
-
-  // Attach directly to each tab button (more reliable than delegation if overlays are present).
-  bar.querySelectorAll(".tab").forEach((btn) => {
-    btn.addEventListener("click", () => {
+  bar.addEventListener("click", (e) => {
+    const btn = e.target.closest(".tab");
+    if (btn) {
       // A manual tab switch ends any open tour (the user is navigating).
       if (!$("#tour").hidden) endTour();
       switchTab(btn.dataset.tab);
-    });
+    }
   });
-
   // Arrow-key navigation across the tablist (a11y).
   bar.addEventListener("keydown", (e) => {
     if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
@@ -498,7 +496,6 @@ function initTabs() {
     tabs[next].focus();
     switchTab(tabs[next].dataset.tab);
   });
-
   // Open the tab from the URL hash (deep link), else default to Run.
   const fromHash = (window.location.hash || "").replace("#", "");
   const valid = ["run", "results", "history", "compare", "validate"];
@@ -1712,7 +1709,6 @@ const TOUR = [
   { sel: "#validatePanel", tab: "validate", title: "Validate a dataset", body: "Paste or upload your own YAML/JSON golden dataset here and check it against the schema (same checks the CLI uses) before committing it." },
 ];
 let _tourIdx = 0;
-let _autoTourTimeout = null;
 
 const TOUR_SEEN_KEY = "llmqa.tourSeen";
 
@@ -1725,10 +1721,7 @@ function markTourSeen() {
 
 function initTour() {
   const btn = $("#tourBtn");
-  if (btn) btn.addEventListener("click", () => {
-    if (_autoTourTimeout) { clearTimeout(_autoTourTimeout); _autoTourTimeout = null; }
-    startTour();
-  });
+  if (btn) btn.addEventListener("click", () => startTour());
   const next = $("#tour-next"), prev = $("#tour-prev"), skip = $("#tour-skip");
   if (next) next.addEventListener("click", () => stepTour(1));
   if (prev) prev.addEventListener("click", () => stepTour(-1));
@@ -1747,19 +1740,12 @@ function initTour() {
   // Auto-open once for first-time visitors, but not when they deep-linked to a
   // specific tab or run (they came for that, not the tour).
   const deepLinked = !!(window.location.hash || new URLSearchParams(window.location.search).get("run"));
-  if (!tourSeen() && !deepLinked) {
-    _autoTourTimeout = setTimeout(() => {
-      if (!tourSeen()) startTour();
-    }, 900);
-  }
+  if (!tourSeen() && !deepLinked) setTimeout(() => { if (!tourSeen()) startTour(); }, 900);
 }
 
 function startTour() {
   _tourIdx = 0;
-  const tourEl = $("#tour");
-  tourEl.hidden = false;
-  // Make the whole tour layer pass clicks through to the page (except the interactive bubble).
-  tourEl.style.pointerEvents = "none";
+  $("#tour").hidden = false;
   showTourStep();
 }
 
@@ -1831,10 +1817,7 @@ function onTourReflow() {
 }
 
 function endTour() {
-  if (_autoTourTimeout) { clearTimeout(_autoTourTimeout); _autoTourTimeout = null; }
-  const tourEl = $("#tour");
-  tourEl.hidden = true;
-  tourEl.style.pointerEvents = "";  // reset
+  $("#tour").hidden = true;
   const tip = $("#tip");
   if (tip) tip.hidden = true;
   markTourSeen();

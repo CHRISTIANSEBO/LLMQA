@@ -725,8 +725,7 @@ tr.result-row.flash { animation: flashrow 1.1s ease-out; }
   border-radius: 5px; pointer-events: none; transition: all 0.18s ease; }
 .tour-bubble { position: fixed; z-index: 93; left: 50%; bottom: 28px; transform: translateX(-50%);
   width: min(460px, 92vw); background: var(--paper-edge); border: 1px solid var(--rule-strong);
-  border-radius: 6px; padding: 18px 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.28);
-  pointer-events: auto; }
+  border-radius: 6px; padding: 18px 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.28); }
 .tour-step { margin: 0 0 4px; font-family: var(--mono); font-size: 11px; text-transform: uppercase;
   letter-spacing: 1px; color: var(--muted); }
 .tour-bubble h3 { margin: 0 0 8px; font-family: var(--serif); font-size: 20px; }
@@ -977,43 +976,4 @@ thead th { position: sticky; top: 0; z-index: 2; background: var(--paper-edge); 
 @media (max-width: 480px) {
   .pwa-nudge { right: 12px; bottom: 12px; padding: 10px 13px; font-size: 12.5px; }
   .pwa-modal-card { padding: 22px 18px 18px; }
-}
-
-/* PWA update toast & offline banner */
-.pwa-update-toast {
-  position: fixed;
-  bottom: 16px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 8px 16px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-  z-index: 9999;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 14px;
-}
-.pwa-update-toast .pwa-update-btn {
-  padding: 4px 14px;
-  font-size: 13px;
-}
-.pwa-offline-banner {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  background: #3a2f1f;
-  color: #f4d9a8;
-  text-align: center;
-  padding: 6px 12px;
-  font-size: 13px;
-  z-index: 9998;
-  transform: translateY(-100%);
-  transition: transform 0.2s ease;
-}
-.pwa-offline-banner.visible {
-  transform: translateY(0);
 }

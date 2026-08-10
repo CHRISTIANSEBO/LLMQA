@@ -1,15 +1,13 @@
 {
   "name": "LLMQA — LLM Quality Assurance",
   "short_name": "LLMQA",
-  "description": "Run LLM evaluations, compare providers, and track quality over time. Works offline for reviewing past runs.",
+  "description": "Run LLM evaluations, compare providers, and track quality over time.",
   "start_url": "/dashboard",
   "scope": "/",
   "display": "standalone",
-  "display_override": ["standalone", "minimal-ui"],
   "background_color": "#16150f",
   "theme_color": "#16150f",
   "orientation": "any",
-  "categories": ["developer tools", "productivity", "utilities"],
   "icons": [
     {
       "src": "/assets/icon-192.png",
@@ -27,27 +25,11 @@
   "shortcuts": [
     {
       "name": "Dashboard",
-      "short_name": "Dashboard",
-      "url": "/dashboard",
-      "description": "Run evaluations and view history"
+      "url": "/dashboard"
     },
     {
-      "name": "Documentation",
-      "short_name": "Docs",
-      "url": "/docs",
-      "description": "LLMQA documentation and guides"
+      "name": "Docs",
+      "url": "/docs"
     }
-  ],
-  "screenshots": [
-    {
-      "src": "/assets/og-image.png",
-      "sizes": "1200x630",
-      "type": "image/png",
-      "form_factor": "wide",
-      "label": "LLMQA Dashboard showing evaluation results"
-    }
-  ],
-  "launch_handler": {
-    "client_mode": "focus-existing"
-  }
+  ]
 }
