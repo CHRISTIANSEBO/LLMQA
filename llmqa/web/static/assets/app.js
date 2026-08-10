@@ -8,6 +8,7 @@ const api = (path, opts) => fetch(path, opts).then(async (r) => {
 
 let METRIC_ORDER = [];
 let CASE_MAP = {}; // case_id → {input, expected, context, tags, gate_metrics}
+let RESULT_MAP = {}; // case_id → full CaseResult (metrics[].detail, cost, latency, error)
 let CURRENT_DATASET = null; // selected dataset file name
 let LAST_RUN = null; // {summary, results} of the most recent single-provider run
 let RUN_SUMMARY = {}; // run_id → history summary row (for the diff slots)
@@ -54,6 +55,17 @@ async function init() {
   if (failedOnly) failedOnly.addEventListener("change", applyResultView);
   const sortSel = $("#resultSort");
   if (sortSel) sortSel.addEventListener("change", applyResultView);
+  const searchEl = $("#resultSearch");
+  if (searchEl) searchEl.addEventListener("input", applyResultView);
+  const metricSel = $("#metricFilter");
+  if (metricSel) {
+    cfg.metrics.forEach((m) => {
+      const opt = document.createElement("option");
+      opt.value = m; opt.textContent = `${m} failed`;
+      metricSel.appendChild(opt);
+    });
+    metricSel.addEventListener("change", applyResultView);
+  }
   initCompare(cfg.all_providers);
   initDatasetValidator();
   initDownloads();
@@ -77,7 +89,22 @@ async function init() {
 // ?run= deep link and clicking a history row's id).
 async function loadRunById(runId) {
   try {
-    const run = await api(`/api/runs/${encodeURIComponent(runId)}`);
+    const raw = await api(`/api/runs/${encodeURIComponent(runId)}`);
+    // /api/runs/{id} returns summary fields plus the full run under `detail`.
+    // Per-case `passed` is a server-side property (not serialized), so compute
+    // it here from gate_metrics + metric.passed (matches the backend).
+    const det = raw.detail || {};
+    const results = (det.results || []).map((r) => ({
+      ...r,
+      passed: casePassed(r),
+    }));
+    const run = {
+      id: raw.id,
+      provider: raw.provider, model: raw.model,
+      pass_rate: raw.pass_rate, avg_score: raw.avg_score,
+      total_cost_usd: raw.cost_usd != null ? raw.cost_usd : det.total_cost_usd,
+      results,
+    };
     const emptyState = $("#resultsEmpty");
     if (emptyState) emptyState.hidden = true;
     renderRun(run);
@@ -87,9 +114,9 @@ async function loadRunById(runId) {
         pass_rate: run.pass_rate, avg_score: run.avg_score,
         total_cost_usd: run.total_cost_usd, run_id: run.id,
       },
-      results: run.results || [],
+      results,
     };
-    renderVerdict(LAST_RUN.summary, LAST_RUN.results);
+    renderVerdict(LAST_RUN.summary, results);
     setDownloadsEnabled(true);
     $("#status").textContent = `Loaded run #${run.id}`;
     return true;
@@ -206,6 +233,8 @@ async function runEval() {
         $("#s-score").textContent = event.avg_score.toFixed(2);
         $("#s-model").textContent = `${event.provider}/${event.model}`;
         $("#s-cost").textContent = "$" + (event.total_cost_usd || 0).toFixed(4);
+        renderLatency(streamedResults);
+        renderMetricBreakdown(streamedResults);
         const stopped = event.stopped_early ? ` — stopped early (${event.stopped_reason})` : "";
         status.textContent = `Done — ${caseCount} cases${stopped}`;
         updateProgress(caseCount, caseCount, passCount, failCount);
@@ -317,6 +346,45 @@ function renderVerdict(summary, results) {
   el.hidden = false;
 }
 
+// p50/p95 latency across the run, shown in a KPI card. Real signal once you
+// run a live provider; stays 0ms on the deterministic mock.
+function renderLatency(results) {
+  const el = $("#s-latency");
+  if (!el) return;
+  const lats = (results || []).map((r) => r.latency_ms || 0).sort((a, b) => a - b);
+  if (!lats.length) { el.textContent = "—"; return; }
+  const pct = (p) => lats[Math.min(lats.length - 1, Math.round((p / 100) * (lats.length - 1)))];
+  el.textContent = `${Math.round(pct(50))} / ${Math.round(pct(95))} ms`;
+}
+
+// Per-metric pass-rate bars: which metric is dragging quality down.
+function renderMetricBreakdown(results) {
+  const panel = $("#metricBreakdown");
+  const bars = $("#mb-bars");
+  if (!panel || !bars) return;
+  const agg = {};
+  (results || []).forEach((r) => {
+    (r.metrics || []).forEach((m) => {
+      const a = (agg[m.metric] = agg[m.metric] || { pass: 0, total: 0, score: 0 });
+      a.total++; a.score += m.score; if (m.passed) a.pass++;
+    });
+  });
+  const names = METRIC_ORDER.filter((n) => agg[n]);
+  if (!names.length) { panel.hidden = true; return; }
+  panel.hidden = false;
+  bars.innerHTML = names.map((n) => {
+    const a = agg[n];
+    const rate = a.total ? a.pass / a.total : 0;
+    const pct = Math.round(rate * 100);
+    const avg = a.total ? (a.score / a.total) : 0;
+    const cls = rate >= 0.8 ? "ok" : rate >= 0.5 ? "mid" : "bad";
+    return `<div class="mb-row">`
+      + `<span class="mb-name">${esc(n)}</span>`
+      + `<span class="mb-track"><span class="mb-fill ${cls}" style="width:${pct}%"></span></span>`
+      + `<span class="mb-val">${pct}% <span class="mb-avg">avg ${avg.toFixed(2)}</span></span></div>`;
+  }).join("");
+}
+
 /** Build a result <tr> for one case — shared by renderRun and appendCaseRow. */
 function buildResultRow(r) {
   const gate = new Set(r.gate_metrics || []);
@@ -338,6 +406,15 @@ function buildResultRow(r) {
   tr.dataset.tags = JSON.stringify(r.tags || []);
   tr.dataset.caseId = r.case_id;
   tr.dataset.output = r.output || "";
+  tr.dataset.input = (CASE_MAP[r.case_id] && CASE_MAP[r.case_id].input) || "";
+  // Stash the full result so the drill-down can show per-metric rationale,
+  // per-case cost/latency, and the expected-vs-actual diff.
+  RESULT_MAP[r.case_id] = r;
+  // Extra filter keys.
+  tr.dataset.gates = JSON.stringify(r.gate_metrics || []);
+  tr.dataset.metricsPassed = JSON.stringify(
+    (r.metrics || []).filter((m) => m.passed).map((m) => m.metric)
+  );
   // Sort/filter keys (used by applyResultView).
   tr.dataset.passed = badge ? "1" : "0";
   tr.dataset.avgScore = String(avgScore(r));
@@ -411,6 +488,8 @@ function renderRun(run) {
   $("#s-score").textContent = run.avg_score.toFixed(2);
   $("#s-model").textContent = `${run.provider}/${run.model}`;
   $("#s-cost").textContent = "$" + (run.total_cost_usd || 0).toFixed(4);
+  renderLatency(run.results);
+  renderMetricBreakdown(run.results);
 
   const tbody = $("#results tbody");
   tbody.innerHTML = "";
@@ -471,8 +550,12 @@ function applyResultView() {
   if (!tbody) return;
   const failedOnly = document.getElementById("failedOnly");
   const sortSel = document.getElementById("resultSort");
+  const searchEl = document.getElementById("resultSearch");
+  const metricSel = document.getElementById("metricFilter");
   const onlyFail = failedOnly && failedOnly.checked;
   const mode = sortSel ? sortSel.value : "default";
+  const q = searchEl ? searchEl.value.trim().toLowerCase() : "";
+  const metricWant = metricSel ? metricSel.value : "";
 
   // Collapse any expanded detail rows first so sorting only moves result rows.
   tbody.querySelectorAll("tr.detail-row").forEach((d) => {
@@ -486,13 +569,28 @@ function applyResultView() {
   });
 
   const rows = [...tbody.querySelectorAll("tr.result-row")];
-  // Filter (tags + failed-only).
+  // Filter (tags + failed-only + text search + metric).
+  let shown = 0;
   rows.forEach((tr) => {
     const tags = tr.dataset.tags ? JSON.parse(tr.dataset.tags) : [];
     const tagOk = !_activeTagFilters.size || tags.some((t) => _activeTagFilters.has(t));
     const failOk = !onlyFail || tr.dataset.passed === "0";
-    tr.hidden = !(tagOk && failOk);
+    const hay = (tr.dataset.caseId + " " + (tr.dataset.input || "")).toLowerCase();
+    const searchOk = !q || hay.includes(q);
+    // Metric filter: show cases where the selected metric FAILED (the debugging
+    // case) — i.e. the metric ran and is not in metricsPassed.
+    let metricOk = true;
+    if (metricWant) {
+      const passedM = tr.dataset.metricsPassed ? JSON.parse(tr.dataset.metricsPassed) : [];
+      const ran = (RESULT_MAP[tr.dataset.caseId]?.metrics || []).some((m) => m.metric === metricWant);
+      metricOk = ran && !passedM.includes(metricWant);
+    }
+    const vis = tagOk && failOk && searchOk && metricOk;
+    tr.hidden = !vis;
+    if (vis) shown++;
   });
+  const countEl = document.getElementById("resultCount");
+  if (countEl) countEl.textContent = shown === rows.length ? `${rows.length} cases` : `${shown} / ${rows.length} cases`;
 
   // Sort (reorder the DOM rows; stable via index tiebreak).
   if (mode !== "default") {
@@ -812,17 +910,49 @@ function toggleDetail(e) {
 
   const detail = document.createElement("tr");
   detail.className = "detail-row";
+  const r = RESULT_MAP[caseId] || {};
   // Context is fetched lazily (it can be large, so /api/config omits it). Show
   // a placeholder that fills in once /api/cases/{id} resolves.
   const ctx = c.has_context
     ? `<div class="detail-field"><span class="dl">Context</span><pre class="dv ctx">${c.context != null ? esc(c.context) : "loading\u2026"}</pre></div>`
     : "";
+  const expected = c.expected || "";
+  // Per-metric breakdown: score, gate vs informational, pass/fail, rationale.
+  const gate = new Set(r.gate_metrics || []);
+  const metricRows = (r.metrics || []).map((m) => {
+    const isGate = gate.size === 0 || gate.has(m.metric);
+    const st = scoreState(m);
+    return `<tr class="mrow ${st.cls}">`
+      + `<td class="mrow-name">${esc(m.metric)}${isGate ? ' <span class="mrow-gate">gate</span>' : ""}</td>`
+      + `<td class="mrow-score"><span class="sglyph">${st.glyph}</span> ${m.score.toFixed(2)}</td>`
+      + `<td class="mrow-detail">${esc(m.detail || "—")}</td></tr>`;
+  }).join("");
+  const metricTable = metricRows
+    ? `<div class="detail-field detail-metrics"><span class="dl">Metric breakdown</span>`
+      + `<table class="mrow-table"><tbody>${metricRows}</tbody></table></div>`
+    : "";
+  // Per-case cost / latency / error.
+  const lat = r.latency_ms != null ? `${r.latency_ms} ms` : "—";
+  const cost = r.cost_usd != null ? `$${(r.cost_usd || 0).toFixed(4)}` : "—";
+  const meta = `<div class="detail-meta">`
+    + `<span class="dmeta"><span class="dmeta-k">latency</span> ${lat}</span>`
+    + `<span class="dmeta"><span class="dmeta-k">cost</span> ${cost}</span>`
+    + (r.error ? `<span class="dmeta dmeta-err"><span class="dmeta-k">error</span> ${esc(r.error)}</span>` : "")
+    + `</div>`;
+  // Expected-vs-actual word diff (only meaningful when there's an expected).
+  const diffBlock = expected
+    ? `<div class="detail-field"><span class="dl">Expected vs. output <button class="mini-btn diff-toggle" type="button">diff</button></span>`
+      + `<pre class="dv exp">${esc(expected)}</pre>`
+      + `<pre class="dv out">${esc(output || "—")}</pre>`
+      + `<pre class="dv worddiff" hidden></pre></div>`
+    : `<div class="detail-field"><span class="dl">Model output</span><pre class="dv out">${esc(output || "—")}</pre></div>`;
   detail.innerHTML = `<td colspan="5" class="detail-cell">
+    ${meta}
     <div class="detail-grid">
       <div class="detail-field"><span class="dl">Input</span><pre class="dv">${esc(c.input || "—")}</pre></div>
       ${ctx}
-      <div class="detail-field"><span class="dl">Model output</span><pre class="dv out">${esc(output || "—")}</pre></div>
-      <div class="detail-field"><span class="dl">Expected</span><pre class="dv exp">${esc(c.expected || "—")}</pre></div>
+      ${diffBlock}
+      ${metricTable}
     </div>
     <div class="detail-actions">
       <button class="mini-btn rerun-btn" type="button">\u21bb Re-run just this case</button>
@@ -845,6 +975,45 @@ function toggleDetail(e) {
     ev.stopPropagation();
     rerunCase(caseId, tr, detail);
   });
+  // Expected-vs-output word diff toggle.
+  const diffBtn = detail.querySelector(".diff-toggle");
+  if (diffBtn) diffBtn.addEventListener("click", (ev) => {
+    ev.stopPropagation();
+    const field = diffBtn.closest(".detail-field");
+    const expPre = field.querySelector(".dv.exp");
+    const outPre = field.querySelector(".dv.out");
+    const diffPre = field.querySelector(".dv.worddiff");
+    const showingDiff = !diffPre.hidden;
+    if (showingDiff) {
+      diffPre.hidden = true;
+      expPre.hidden = false; outPre.hidden = false;
+      diffBtn.textContent = "diff";
+    } else {
+      diffPre.innerHTML = wordDiff(expected, output || "");
+      diffPre.hidden = false;
+      expPre.hidden = true; outPre.hidden = true;
+      diffBtn.textContent = "show raw";
+    }
+  });
+}
+
+// Tiny word-level diff: highlights tokens present in output-but-not-expected
+// (added) and expected-but-not-output (missing). Not a full LCS diff — a
+// readable, dependency-free approximation that makes a mismatch obvious.
+function wordDiff(expected, output) {
+  const tok = (s) => s.split(/(\s+)/);
+  const norm = (w) => w.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const expSet = new Set(tok(expected).map(norm).filter(Boolean));
+  const outSet = new Set(tok(output).map(norm).filter(Boolean));
+  const expHtml = tok(expected).map((w) => {
+    const n = norm(w);
+    return n && !outSet.has(n) ? `<span class="wd-miss">${esc(w)}</span>` : esc(w);
+  }).join("");
+  const outHtml = tok(output).map((w) => {
+    const n = norm(w);
+    return n && !expSet.has(n) ? `<span class="wd-add">${esc(w)}</span>` : esc(w);
+  }).join("");
+  return `<span class="wd-label">expected</span>${expHtml}\n<span class="wd-label">output</span>${outHtml}`;
 }
 
 // Re-run a single case through the currently selected provider/metrics using

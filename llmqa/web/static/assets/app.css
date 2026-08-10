@@ -387,6 +387,47 @@ main { max-width: 1040px; margin: 0 auto; padding: 30px 22px 60px; }
 .ds-result.err { border-color: var(--fail); }
 .ds-ok-head { color: var(--pass); font-family: var(--mono); font-size: 13px; margin: 0 0 10px; }
 .ds-err-head { color: var(--fail); font-family: var(--mono); font-size: 13px; margin: 0 0 8px; }
+
+/* ---- Analysis tools: metric breakdown, drill-down detail, diff, filters --- */
+.metric-breakdown .mb-bars { display: grid; gap: 8px; margin-top: 4px; }
+.mb-row { display: grid; grid-template-columns: 130px 1fr auto; gap: 12px; align-items: center; }
+.mb-name { font-family: var(--mono); font-size: 12px; color: var(--ink); }
+.mb-track { height: 10px; background: var(--field-bg); border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; }
+.mb-fill { display: block; height: 100%; }
+.mb-fill.ok  { background: var(--pass); }
+.mb-fill.mid { background: var(--warn); }
+.mb-fill.bad { background: var(--fail); }
+.mb-val { font-family: var(--mono); font-size: 12px; color: var(--ink-2); white-space: nowrap; }
+.mb-avg { color: var(--muted); font-size: 11px; }
+
+/* Per-case drill-down: meta row + metric breakdown table. */
+.detail-meta { display: flex; gap: 18px; flex-wrap: wrap; margin-bottom: 10px; font-family: var(--mono); font-size: 12px; }
+.dmeta-k { color: var(--muted); text-transform: uppercase; font-size: 10px; letter-spacing: 0.5px; margin-right: 5px; }
+.dmeta-err { color: var(--fail); }
+.detail-metrics { grid-column: 1 / -1; }
+.mrow-table { width: 100%; border-collapse: collapse; margin-top: 4px; }
+.mrow-table td { padding: 5px 8px; border-top: 1px solid var(--rule); font-size: 12.5px; vertical-align: top; }
+.mrow-name { font-family: var(--mono); color: var(--ink); white-space: nowrap; }
+.mrow-gate { font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--on-ink);
+  background: var(--ink); padding: 1px 5px; border-radius: 2px; margin-left: 6px; }
+.mrow-score { font-family: var(--mono); white-space: nowrap; }
+.mrow.high .mrow-score, .mrow.mid .mrow-score { color: var(--pass); }
+.mrow.low .mrow-score { color: var(--fail); }
+.mrow-detail { color: var(--ink-2); font-size: 12px; }
+
+/* Expected-vs-output word diff. */
+.dv.worddiff { white-space: pre-wrap; }
+.wd-label { display: inline-block; font-family: var(--mono); font-size: 9px; text-transform: uppercase;
+  letter-spacing: 0.5px; color: var(--muted); margin-right: 6px; }
+.wd-add  { background: var(--pass-bg); color: var(--pass); border-radius: 2px; }
+.wd-miss { background: var(--fail-bg); color: var(--fail); border-radius: 2px; text-decoration: line-through; }
+.diff-toggle { margin-left: 8px; }
+
+/* Result tools: search + count. */
+.result-search { min-width: 220px; padding: 6px 10px; font-family: var(--mono); font-size: 12.5px;
+  background: var(--field-bg); border: 1px solid var(--rule-strong); color: var(--ink); border-radius: 3px; }
+.result-search:focus { outline: 2px solid var(--ink); outline-offset: 1px; }
+.result-count { font-family: var(--mono); font-size: 12px; color: var(--muted); margin-left: auto; }
 .empty-lead { margin: 0 auto 10px; max-width: 440px; font-size: 14.5px; color: var(--ink-2); line-height: 1.55; }
 .empty-lead strong { color: var(--ink); }
 .empty-note { margin: 0; font-size: 12.5px; color: var(--muted); font-style: italic; }
