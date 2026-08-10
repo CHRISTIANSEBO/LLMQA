@@ -14,7 +14,11 @@ ships as a single service (good for Railway).
 from __future__ import annotations
 
 import json as _json
+import logging
 import os
+import time
+import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -86,6 +90,30 @@ if _origins:
 # frame-deny, and HSTS behind TLS). Cheap hardening for a public deploy; see
 # SecurityHeadersMiddleware for the exact policy and its env overrides.
 app.add_middleware(SecurityHeadersMiddleware)
+
+_access_log = logging.getLogger("llmqa.web.access")
+
+
+@app.middleware("http")
+async def request_logging(request: Request, call_next):
+    """Structured access logging with a per-request id.
+
+    Assigns/propagates an ``X-Request-ID`` (accepts an inbound one from a proxy)
+    and logs method, path, status, and duration. Quiet by default — set
+    ``LLMQA_LOG_LEVEL=INFO`` (or DEBUG) to see it. Static/asset noise is skipped.
+    """
+    req_id = request.headers.get("x-request-id") or uuid.uuid4().hex[:12]
+    start = time.perf_counter()
+    response = await call_next(request)
+    response.headers.setdefault("X-Request-ID", req_id)
+    path = request.url.path
+    if not path.startswith("/assets"):
+        dur_ms = (time.perf_counter() - start) * 1000
+        _access_log.info(
+            "%s %s -> %s (%.1fms)", request.method, path, response.status_code, dur_ms,
+            extra={"request_id": req_id},
+        )
+    return response
 
 
 def _http_from_llmqa_error(exc: LLMQAError) -> HTTPException:
@@ -359,32 +387,42 @@ async def compare(req: CompareRequest, request: Request) -> dict:
     for prov_name in req.providers:
         check_provider_allowed(prov_name)
 
-    all_runs: dict[str, dict] = {}
+    # Validate metric names once up front so a bad request fails fast (before
+    # spending any compute) with a clear 400.
+    for name in req.metrics:
+        if name not in REGISTRY:
+            raise HTTPException(status_code=400, detail=f"Unknown metric {name!r}")
 
-    for prov_name in req.providers:
-        try:
-            provider = _get_cached_provider(prov_name)
-        except LLMQAError as exc:
-            raise _http_from_llmqa_error(exc) from exc
+    dataset = resolve_dataset_name(req.dataset)
 
-        metrics = []
-        for name in req.metrics:
-            if name not in REGISTRY:
-                raise HTTPException(status_code=400, detail=f"Unknown metric {name!r}")
-            if name in ("llm_judge", "hallucination"):
-                metrics.append(build_metric(name, judge=provider))
-            else:
-                metrics.append(build_metric(name))
-
-        eval_run = run_eval(resolve_dataset_name(req.dataset), provider, metrics, tags=req.tags)
-
+    def _run_one(prov_name: str) -> dict:
+        provider = _get_cached_provider(prov_name)
+        metrics = [
+            build_metric(name, judge=provider)
+            if name in ("llm_judge", "hallucination")
+            else build_metric(name)
+            for name in req.metrics
+        ]
+        eval_run = run_eval(dataset, provider, metrics, tags=req.tags)
         payload = eval_run.model_dump()
         payload["pass_rate"] = eval_run.pass_rate
         payload["avg_score"] = eval_run.avg_score
         payload["score_by_metric"] = eval_run.score_by_metric()
         for case_payload, case_result in zip(payload["results"], eval_run.results, strict=False):
             case_payload["passed"] = case_result.passed
-        all_runs[prov_name] = payload
+        return payload
+
+    # Run the providers concurrently: each is an independent, I/O-bound eval, so
+    # comparing two real models no longer takes the sum of their latencies.
+    all_runs: dict[str, dict] = {}
+    with ThreadPoolExecutor(max_workers=len(req.providers)) as ex:
+        futures = {ex.submit(_run_one, p): p for p in req.providers}
+        for fut in as_completed(futures):
+            prov_name = futures[fut]
+            try:
+                all_runs[prov_name] = fut.result()
+            except LLMQAError as exc:
+                raise _http_from_llmqa_error(exc) from exc
 
     return {"runs": all_runs, "providers": req.providers}
 

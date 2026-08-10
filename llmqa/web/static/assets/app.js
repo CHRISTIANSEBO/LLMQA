@@ -48,6 +48,12 @@ async function init() {
   });
 
   $("#runBtn").addEventListener("click", runEval);
+  const cancelBtn = $("#cancelBtn");
+  if (cancelBtn) cancelBtn.addEventListener("click", cancelRun);
+  const failedOnly = $("#failedOnly");
+  if (failedOnly) failedOnly.addEventListener("change", applyResultView);
+  const sortSel = $("#resultSort");
+  if (sortSel) sortSel.addEventListener("change", applyResultView);
   initCompare(cfg.all_providers);
   initDownloads();
   initDatasetPeek();
@@ -55,9 +61,41 @@ async function init() {
   initChartZoom();
   initTour();
   await loadHistory();
-  // Always start fresh: no preset runs and no auto-loaded previous run. The
-  // results area shows an empty-state prompt until you trigger a run yourself.
-  showEmptyState();
+  // Deep link: /dashboard?run=<id> loads and shows that stored run so results
+  // are shareable/bookmarkable. Otherwise start fresh with the empty state.
+  const wantRun = new URLSearchParams(window.location.search).get("run");
+  if (wantRun) {
+    const ok = await loadRunById(wantRun);
+    if (!ok) showEmptyState();
+  } else {
+    showEmptyState();
+  }
+}
+
+// Load a stored run by id and render it into the results panel (used by the
+// ?run= deep link and clicking a history row's id).
+async function loadRunById(runId) {
+  try {
+    const run = await api(`/api/runs/${encodeURIComponent(runId)}`);
+    const emptyState = $("#resultsEmpty");
+    if (emptyState) emptyState.hidden = true;
+    renderRun(run);
+    LAST_RUN = {
+      summary: {
+        provider: run.provider, model: run.model,
+        pass_rate: run.pass_rate, avg_score: run.avg_score,
+        total_cost_usd: run.total_cost_usd, run_id: run.id,
+      },
+      results: run.results || [],
+    };
+    renderVerdict(LAST_RUN.summary, LAST_RUN.results);
+    setDownloadsEnabled(true);
+    $("#status").textContent = `Loaded run #${run.id}`;
+    return true;
+  } catch (e) {
+    $("#status").textContent = "\u26a0 " + e.message;
+    return false;
+  }
 }
 
 // Friendly "nothing here yet" prompt shown before the first run so the page
@@ -99,10 +137,18 @@ async function onDatasetChange(e) {
   }
 }
 
+// Holds the AbortController for the in-flight streaming run so the Cancel
+// button (and a dataset switch) can stop it mid-flight.
+let _runAbort = null;
+
 async function runEval() {
   const btn = $("#runBtn");
+  const cancelBtn = $("#cancelBtn");
   const status = $("#status");
+  // If a run is already streaming, this same handler shouldn't re-enter.
   btn.disabled = true;
+  _runAbort = new AbortController();
+  if (cancelBtn) cancelBtn.hidden = false;
 
   // Reset UI for a fresh streaming run
   const emptyState = $("#resultsEmpty");
@@ -122,12 +168,18 @@ async function runEval() {
 
   const tags = $("#tags").value.trim().split(/\s+/).filter(Boolean);
   const tagList = tags.length ? tags : null;
+  const concEl = $("#concurrency");
+  const costEl = $("#maxCost");
+  const conc = concEl ? Math.max(1, Math.min(16, parseInt(concEl.value, 10) || 1)) : 1;
+  const maxCost = costEl && costEl.value !== "" ? parseFloat(costEl.value) : null;
   const body = {
     provider: $("#provider").value,
     metrics: selectedMetrics(),
     tags: tagList,
     dataset: CURRENT_DATASET,
     store: $("#store").checked,
+    concurrency: conc,
+    max_cost_usd: Number.isFinite(maxCost) ? maxCost : null,
   };
 
   const total = expectedCaseCount(tagList);
@@ -153,31 +205,47 @@ async function runEval() {
         $("#s-score").textContent = event.avg_score.toFixed(2);
         $("#s-model").textContent = `${event.provider}/${event.model}`;
         $("#s-cost").textContent = "$" + (event.total_cost_usd || 0).toFixed(4);
-        status.textContent = `Done — ${caseCount} cases`;
+        const stopped = event.stopped_early ? ` — stopped early (${event.stopped_reason})` : "";
+        status.textContent = `Done — ${caseCount} cases${stopped}`;
         updateProgress(caseCount, caseCount, passCount, failCount);
         renderTagFilter(streamedResults);
         LAST_RUN = { summary: event, results: streamedResults };
         renderVerdict(event, streamedResults);
         setDownloadsEnabled(true);
+        // Make the stored run shareable/bookmarkable without a reload.
+        if (event.run_id != null) {
+          const url = new URL(window.location.href);
+          url.searchParams.set("run", event.run_id);
+          history.replaceState(null, "", url);
+        }
         await loadHistory();
-      }
+      },
+      _runAbort.signal
     );
   } catch (e) {
-    status.textContent = "⚠ " + e.message;
+    if (e.name === "AbortError") status.textContent = "Run cancelled.";
+    else status.textContent = "⚠ " + e.message;
   } finally {
     btn.disabled = false;
+    _runAbort = null;
+    if (cancelBtn) cancelBtn.hidden = true;
     if (tableWrap) tableWrap.setAttribute("aria-busy", "false");
   }
+}
+
+function cancelRun() {
+  if (_runAbort) _runAbort.abort();
 }
 
 /** Read a POST /api/run/stream Server-Sent-Events response, invoking
  *  onCase(result) for each completed case and onDone(summary) at the end.
  *  Kept as a small shared helper so SSE parsing lives in one place. */
-async function streamRun(body, onCase, onDone) {
+async function streamRun(body, onCase, onDone, signal) {
   const resp = await fetch("/api/run/stream", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
+    signal,
   });
   if (!resp.ok) {
     const err = await resp.json().catch(() => ({}));
@@ -269,6 +337,10 @@ function buildResultRow(r) {
   tr.dataset.tags = JSON.stringify(r.tags || []);
   tr.dataset.caseId = r.case_id;
   tr.dataset.output = r.output || "";
+  // Sort/filter keys (used by applyResultView).
+  tr.dataset.passed = badge ? "1" : "0";
+  tr.dataset.avgScore = String(avgScore(r));
+  tr.dataset.latency = String(r.latency_ms || 0);
   tr.title = "Click to expand";
   tr.innerHTML = `<td data-label="Case"><strong class="expand-toggle">\u25b8 ${r.case_id}</strong></td>
     <td data-label="Result"><span class="badge ${badge ? "pass" : "fail"}"><span class="glyph">${bGlyph}</span>${badge ? "PASS" : "FAIL"}</span></td>
@@ -388,14 +460,50 @@ function renderTagFilter(results) {
 }
 
 function applyTagFilter() {
-  document.querySelectorAll("#results tbody tr").forEach(tr => {
-    if (tr.classList.contains("detail-row")) return; // handled with parent
-    const tags = (tr.dataset.tags ? JSON.parse(tr.dataset.tags) : []);
-    const show = !_activeTagFilters.size || tags.some(t => _activeTagFilters.has(t));
-    tr.hidden = !show;
-    const next = tr.nextElementSibling;
-    if (next && next.classList.contains("detail-row")) next.hidden = !show;
+  applyResultView();
+}
+
+// Combined view controls for the results table: tag filter + "failed only" +
+// sort. Runs over the current rows (works during streaming and after).
+function applyResultView() {
+  const tbody = document.querySelector("#results tbody");
+  if (!tbody) return;
+  const failedOnly = document.getElementById("failedOnly");
+  const sortSel = document.getElementById("resultSort");
+  const onlyFail = failedOnly && failedOnly.checked;
+  const mode = sortSel ? sortSel.value : "default";
+
+  // Collapse any expanded detail rows first so sorting only moves result rows.
+  tbody.querySelectorAll("tr.detail-row").forEach((d) => {
+    const parent = d.previousElementSibling;
+    if (parent) {
+      parent.classList.remove("expanded");
+      const t = parent.querySelector(".expand-toggle");
+      if (t) t.innerHTML = `\u25b8 ${parent.dataset.caseId}`;
+    }
+    d.remove();
   });
+
+  const rows = [...tbody.querySelectorAll("tr.result-row")];
+  // Filter (tags + failed-only).
+  rows.forEach((tr) => {
+    const tags = tr.dataset.tags ? JSON.parse(tr.dataset.tags) : [];
+    const tagOk = !_activeTagFilters.size || tags.some((t) => _activeTagFilters.has(t));
+    const failOk = !onlyFail || tr.dataset.passed === "0";
+    tr.hidden = !(tagOk && failOk);
+  });
+
+  // Sort (reorder the DOM rows; stable via index tiebreak).
+  if (mode !== "default") {
+    const num = (v) => (Number.isFinite(+v) ? +v : 0);
+    const cmp = {
+      "fail-first": (a, b) => num(a.dataset.passed) - num(b.dataset.passed),
+      "score-asc": (a, b) => num(a.dataset.avgScore) - num(b.dataset.avgScore),
+      "score-desc": (a, b) => num(b.dataset.avgScore) - num(a.dataset.avgScore),
+      "latency-desc": (a, b) => num(b.dataset.latency) - num(a.dataset.latency),
+    }[mode];
+    if (cmp) rows.sort(cmp).forEach((tr) => tbody.appendChild(tr));
+  }
 }
 // ------------------------------------------------------------------------
 
@@ -411,7 +519,7 @@ async function loadHistory() {
     tr.draggable = true;
     tr.dataset.runId = r.id;
     tr.title = "Drag into a slot above — or click to add to the diff";
-    tr.innerHTML = `<td>${r.id}</td>
+    tr.innerHTML = `<td><a class="link-btn run-link" data-run-id="${r.id}" title="Open this run">#${r.id}</a></td>
       <td>${(r.timestamp || "").replace("T", " ").replace("+00:00", "")}</td>
       <td>${r.provider}/${r.model}</td>
       <td>${Math.round(r.pass_rate * 100)}%</td>
@@ -423,7 +531,22 @@ async function loadHistory() {
       tr.classList.add("dragging");
     });
     tr.addEventListener("dragend", () => tr.classList.remove("dragging"));
-    tr.addEventListener("click", () => assignRunToNextSlot(r.id));
+    tr.addEventListener("click", (e) => {
+      // Clicking the #id link opens the run; clicking elsewhere in the row
+      // adds it to the diff slots (existing behavior).
+      const link = e.target.closest(".run-link");
+      if (link) {
+        e.stopPropagation();
+        const id = link.dataset.runId;
+        const url = new URL(window.location.href);
+        url.searchParams.set("run", id);
+        history.replaceState(null, "", url);
+        loadRunById(id);
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      } else {
+        assignRunToNextSlot(r.id);
+      }
+    });
     tbody.appendChild(tr);
   });
   refreshSlots();
@@ -457,15 +580,30 @@ function renderTrend(runs) {
   const gridY = [0, 0.5, 1].map((v) =>
     `<line x1="${padX}" y1="${y(v).toFixed(1)}" x2="${W - padX}" y2="${y(v).toFixed(1)}" stroke="${gridColor}" stroke-width="1"/>` +
     `<text x="2" y="${(y(v) + 3).toFixed(1)}" fill="${mutedColor}" font-size="9">${v}</text>`).join("");
+  // Mark where the dataset changed between consecutive runs: a score jump then
+  // isn't apples-to-apples. Dashed vertical rule + a small 'dataset changed' tag.
+  let datasetChanged = false;
+  const marks = series.map((r, i) => {
+    if (i === 0) return "";
+    const prev = series[i - 1];
+    if (r.dataset_hash && prev.dataset_hash && r.dataset_hash !== prev.dataset_hash) {
+      datasetChanged = true;
+      const mx = x(i).toFixed(1);
+      return `<line x1="${mx}" y1="${padY}" x2="${mx}" y2="${H - padY}" stroke="${mutedColor}" stroke-width="1" stroke-dasharray="2 3"/>`
+        + `<text x="${mx}" y="${padY - 4}" fill="${mutedColor}" font-size="8" text-anchor="middle">dataset Δ</text>`;
+    }
+    return "";
+  }).join("");
   el.innerHTML = `
     <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="quality trend">
-      ${gridY}
+      ${gridY}${marks}
       <path d="${path("avg_score")}" fill="none" stroke="${inkColor2}" stroke-width="2" stroke-dasharray="5 4"/>
       <path d="${path("pass_rate")}" fill="none" stroke="${inkColor}" stroke-width="2.5"/>
       ${dots("avg_score", inkColor2)}${dots("pass_rate", inkColor)}
     </svg>
     <div class="chart-cap">
       ―― pass rate (solid) &nbsp;&nbsp; –– avg score (dashed) &nbsp; (oldest → newest, ${n} runs)
+      ${datasetChanged ? '&nbsp;&nbsp;¦ dataset Δ = golden set changed (not apples-to-apples)' : ''}
       <span class="zoom-hint">⤢ tap to enlarge / download</span>
     </div>`;
 }
@@ -999,9 +1137,11 @@ function initChartZoom() {
   let currentSvg = null;
   let currentName = "llmqa-chart";
 
+  let _lastFocus = null;
   const open = (svg, title, name) => {
     currentSvg = svg;
     currentName = name;
+    _lastFocus = document.activeElement;
     const body = $("#cm-body");
     body.innerHTML = "";
     const clone = svg.cloneNode(true);
@@ -1014,12 +1154,30 @@ function initChartZoom() {
     if (t) t.textContent = title;
     modal.hidden = false;
     document.body.style.overflow = "hidden";
+    // Move focus into the dialog for keyboard users.
+    const closeBtn = $("#cm-close");
+    if (closeBtn) closeBtn.focus();
   };
   const close = () => {
     modal.hidden = true;
     $("#cm-body").innerHTML = "";
     document.body.style.overflow = "";
+    // Restore focus to whatever opened the modal.
+    if (_lastFocus && _lastFocus.focus) _lastFocus.focus();
+    _lastFocus = null;
   };
+
+  // Trap Tab focus within the modal while it's open (accessibility).
+  modal.addEventListener("keydown", (e) => {
+    if (e.key !== "Tab") return;
+    const focusables = modal.querySelectorAll(
+      'button, [href], input, select, [tabindex]:not([tabindex="-1"])'
+    );
+    if (!focusables.length) return;
+    const first = focusables[0], last = focusables[focusables.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  });
 
   // Event delegation: charts are re-rendered via innerHTML, so bind on document.
   document.addEventListener("click", (e) => {
