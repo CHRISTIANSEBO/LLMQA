@@ -23,6 +23,7 @@ import time
 from collections import defaultdict, deque
 
 from fastapi import HTTPException, Request
+from starlette.middleware.base import BaseHTTPMiddleware
 
 # Providers that cost real money and therefore need explicit opt-in.
 REAL_PROVIDERS = frozenset({"anthropic", "openai", "xai", "grok"})
@@ -138,3 +139,82 @@ def guard_mutation(request: Request, provider: str | None = None) -> None:
     rate_limit(request)
     if provider is not None:
         check_provider_allowed(provider)
+
+
+# --- Request body size limit ------------------------------------------------
+# Mutating endpoints take small JSON bodies; cap them so a client can't ship a
+# huge payload (accidental or malicious). Override with LLMQA_MAX_BODY_BYTES.
+DEFAULT_MAX_BODY_BYTES = 256 * 1024  # 256 KiB
+
+
+def _max_body_bytes() -> int:
+    try:
+        return int(os.environ.get("LLMQA_MAX_BODY_BYTES", DEFAULT_MAX_BODY_BYTES))
+    except ValueError:
+        return DEFAULT_MAX_BODY_BYTES
+
+
+async def enforce_body_limit(request: Request) -> None:
+    """Reject an over-large request body (413) before it is parsed.
+
+    Checks the Content-Length header when present; otherwise reads the body
+    (already buffered by Starlette) and measures it. FastAPI re-reads the same
+    buffered body when it parses the model, so this doesn't consume the stream.
+    """
+    limit = _max_body_bytes()
+    if limit <= 0:
+        return
+    cl = request.headers.get("content-length")
+    if cl is not None:
+        try:
+            if int(cl) > limit:
+                raise HTTPException(status_code=413, detail="Request body too large.")
+            return
+        except ValueError:
+            pass
+    body = await request.body()
+    if len(body) > limit:
+        raise HTTPException(status_code=413, detail="Request body too large.")
+
+
+# --- Security headers -------------------------------------------------------
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Attach baseline security headers to every response.
+
+    Conservative defaults that don't break the same-origin dashboard:
+    - Content-Security-Policy: self-only, but allowing the inline theme script
+      (via 'unsafe-inline') that every page runs before paint to avoid a
+      flash-of-wrong-theme. Removing 'unsafe-inline' is tracked as a follow-up
+      (move the inline snippet to a hashed file).
+    - X-Content-Type-Options: nosniff
+    - Referrer-Policy: strict-origin-when-cross-origin
+    - X-Frame-Options: DENY (clickjacking)
+    - Strict-Transport-Security only when the request arrived over HTTPS.
+    Override or disable the CSP with LLMQA_CSP (set to empty to omit it).
+    """
+
+    DEFAULT_CSP = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data:; "
+        "connect-src 'self'; "
+        "base-uri 'self'; "
+        "frame-ancestors 'none'"
+    )
+
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        csp = os.environ.get("LLMQA_CSP", self.DEFAULT_CSP)
+        if csp:
+            response.headers.setdefault("Content-Security-Policy", csp)
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        # HSTS only makes sense over TLS; behind a proxy trust X-Forwarded-Proto.
+        proto = request.headers.get("x-forwarded-proto", request.url.scheme)
+        if proto == "https":
+            response.headers.setdefault(
+                "Strict-Transport-Security", "max-age=31536000; includeSubDomains"
+            )
+        return response

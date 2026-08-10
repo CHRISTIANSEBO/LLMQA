@@ -116,6 +116,10 @@ async function runEval() {
   const verdictEl = $("#verdict");
   if (verdictEl) verdictEl.hidden = true;
 
+  // Tell assistive tech the results region is actively updating.
+  const tableWrap = document.querySelector("#resultsPanel .table-wrap");
+  if (tableWrap) tableWrap.setAttribute("aria-busy", "true");
+
   const tags = $("#tags").value.trim().split(/\s+/).filter(Boolean);
   const tagList = tags.length ? tags : null;
   const body = {
@@ -162,6 +166,7 @@ async function runEval() {
     status.textContent = "⚠ " + e.message;
   } finally {
     btn.disabled = false;
+    if (tableWrap) tableWrap.setAttribute("aria-busy", "false");
   }
 }
 
@@ -276,6 +281,23 @@ function buildResultRow(r) {
 
 function appendCaseRow(r) {
   $("#results tbody").appendChild(buildResultRow(r));
+}
+
+// Fetch a single case's full detail (incl. context) once and cache it into
+// CASE_MAP so re-expanding is instant. /api/config omits context to keep its
+// payload small; this fills it in on demand.
+async function ensureContext(caseId) {
+  const c = CASE_MAP[caseId];
+  if (c && c.context != null) return c;
+  try {
+    const full = await api(
+      `/api/cases/${encodeURIComponent(caseId)}?dataset=${encodeURIComponent(CURRENT_DATASET || "")}`
+    );
+    CASE_MAP[caseId] = { ...(CASE_MAP[caseId] || {}), ...full };
+    return CASE_MAP[caseId];
+  } catch {
+    return null;
+  }
 }
 
 function totalLatency(run) {
@@ -633,7 +655,11 @@ function toggleDetail(e) {
 
   const detail = document.createElement("tr");
   detail.className = "detail-row";
-  const ctx = c.has_context ? `<div class="detail-field"><span class="dl">Context</span><pre class="dv ctx">${esc(c.context || "—")}</pre></div>` : "";
+  // Context is fetched lazily (it can be large, so /api/config omits it). Show
+  // a placeholder that fills in once /api/cases/{id} resolves.
+  const ctx = c.has_context
+    ? `<div class="detail-field"><span class="dl">Context</span><pre class="dv ctx">${c.context != null ? esc(c.context) : "loading\u2026"}</pre></div>`
+    : "";
   detail.innerHTML = `<td colspan="5" class="detail-cell">
     <div class="detail-grid">
       <div class="detail-field"><span class="dl">Input</span><pre class="dv">${esc(c.input || "—")}</pre></div>
@@ -649,6 +675,14 @@ function toggleDetail(e) {
   tr.after(detail);
   tr.classList.add("expanded");
   if (toggle) toggle.innerHTML = `\u25be ${caseId}`;
+  // Lazily load context if we don't have it yet and the case has one.
+  if (c.has_context && c.context == null) {
+    ensureContext(caseId).then((full) => {
+      if (!full) return;
+      const pre = detail.querySelector(".dv.ctx");
+      if (pre) pre.textContent = full.context || "\u2014";
+    });
+  }
   const rerunBtn = detail.querySelector(".rerun-btn");
   if (rerunBtn) rerunBtn.addEventListener("click", (ev) => {
     ev.stopPropagation();
@@ -692,7 +726,7 @@ async function rerunCase(caseId, row, detailRow) {
 // Report downloads (Markdown / JSON) for the most recent run
 // =====================================================================
 function setDownloadsEnabled(on) {
-  ["#dl-md", "#dl-json"].forEach((sel) => {
+  ["#dl-md", "#dl-json", "#dl-junit"].forEach((sel) => {
     const b = document.querySelector(sel);
     if (b) b.disabled = !on;
   });
@@ -700,7 +734,7 @@ function setDownloadsEnabled(on) {
 
 function initDownloads() {
   setDownloadsEnabled(false);
-  const md = $("#dl-md"), js = $("#dl-json");
+  const md = $("#dl-md"), js = $("#dl-json"), ju = $("#dl-junit");
   if (md) md.addEventListener("click", () => {
     if (!LAST_RUN) return;
     downloadFile(reportFilename("md"), buildReportMarkdown(), "text/markdown");
@@ -709,6 +743,40 @@ function initDownloads() {
     if (!LAST_RUN) return;
     downloadFile(reportFilename("json"), buildReportJSON(), "application/json");
   });
+  if (ju) ju.addEventListener("click", () => {
+    if (!LAST_RUN) return;
+    downloadFile(reportFilename("xml"), buildReportJUnit(), "application/xml");
+  });
+}
+
+// Client-side JUnit XML, mirroring report.to_junit so a dashboard run produces
+// the same CI-consumable artifact as the CLI: one <testcase> per case, a
+// <failure> when it didn't pass, gated metrics in the message.
+function buildReportJUnit() {
+  const s = LAST_RUN.summary || {};
+  const rows = LAST_RUN.results || [];
+  const failures = rows.filter((r) => !r.passed).length;
+  const suite = `llmqa.${(s.provider || "run")}`;
+  const xesc = (v) => String(v)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+  const lines = ['<?xml version="1.0" encoding="UTF-8"?>'];
+  lines.push(`<testsuite name="${xesc(suite)}" tests="${rows.length}" failures="${failures}">`);
+  rows.forEach((r) => {
+    const time = ((r.latency_ms || 0) / 1000).toFixed(3);
+    if (r.passed) {
+      lines.push(`  <testcase classname="${xesc(suite)}" name="${xesc(r.case_id)}" time="${time}"/>`);
+    } else {
+      const gated = (r.gate_metrics && r.gate_metrics.length)
+        ? r.gate_metrics.join(", ") : "all metrics";
+      const scores = (r.metrics || []).map((m) => `${m.metric}=${m.score.toFixed(2)}`).join(" ");
+      lines.push(`  <testcase classname="${xesc(suite)}" name="${xesc(r.case_id)}" time="${time}">`);
+      lines.push(`    <failure message="${xesc(`gated on ${gated}`)}">${xesc(scores)}</failure>`);
+      lines.push(`  </testcase>`);
+    }
+  });
+  lines.push(`</testsuite>`);
+  return lines.join("\n");
 }
 
 function reportFilename(ext) {
