@@ -14,6 +14,8 @@ let LAST_RUN = null; // {summary, results} of the most recent single-provider ru
 let RUN_SUMMARY = {}; // run_id → history summary row (for the diff slots)
 
 async function init() {
+  // Wire tabs first so a #hash deep link applies before any async work.
+  initTabs();
   const cfg = await api("/api/config");
   METRIC_ORDER = cfg.metrics;
   CURRENT_DATASET = cfg.default_dataset || cfg.dataset;
@@ -66,6 +68,8 @@ async function init() {
     });
     metricSel.addEventListener("change", applyResultView);
   }
+  const historySearch = $("#historySearch");
+  if (historySearch) historySearch.addEventListener("input", applyHistoryFilter);
   initCompare(cfg.all_providers);
   initDatasetValidator();
   initDownloads();
@@ -108,6 +112,8 @@ async function loadRunById(runId) {
     const emptyState = $("#resultsEmpty");
     if (emptyState) emptyState.hidden = true;
     renderRun(run);
+    switchTab("results");
+    renderLoadedBanner(run);
     LAST_RUN = {
       summary: {
         provider: run.provider, model: run.model,
@@ -178,7 +184,8 @@ async function runEval() {
   _runAbort = new AbortController();
   if (cancelBtn) cancelBtn.hidden = false;
 
-  // Reset UI for a fresh streaming run
+  // Reset UI for a fresh streaming run; jump to Results so rows are visible.
+  switchTab("results");
   const emptyState = $("#resultsEmpty");
   if (emptyState) emptyState.hidden = true;
   $("#summary").hidden = true;
@@ -242,6 +249,7 @@ async function runEval() {
         LAST_RUN = { summary: event, results: streamedResults };
         renderVerdict(event, streamedResults);
         setDownloadsEnabled(true);
+        renderLoadedBanner({ id: event.run_id, provider: event.provider, model: event.model });
         // Make the stored run shareable/bookmarkable without a reload.
         if (event.run_id != null) {
           const url = new URL(window.location.href);
@@ -344,6 +352,57 @@ function renderVerdict(summary, results) {
     + `<strong>${(summary.avg_score || 0).toFixed(2)}</strong> \u00b7 `
     + `${summary.provider}/${summary.model}${tail}`;
   el.hidden = false;
+}
+
+// Shows which stored run the Results view currently reflects, so the KPI cards
+// and table are never ambiguous about what you're looking at.
+function renderLoadedBanner(run) {
+  const el = document.getElementById("loadedBanner");
+  if (!el) return;
+  if (!run || run.id == null) { el.hidden = true; return; }
+  el.hidden = false;
+  el.innerHTML = `Showing <strong>run #${run.id}</strong> · ${esc(run.provider || "")}/${esc(run.model || "")}`;
+}
+
+// ---- Tabs: Run / Results / History & trend / Compare / Validate ----------
+function switchTab(name) {
+  document.querySelectorAll(".tab").forEach((b) => {
+    const on = b.dataset.tab === name;
+    b.setAttribute("aria-selected", on ? "true" : "false");
+    b.classList.toggle("active", on);
+  });
+  document.querySelectorAll(".tabpanel").forEach((p) => {
+    p.hidden = p.id !== `tab-${name}`;
+  });
+  try { history.replaceState(null, "", updateHashTab(name)); } catch (e) {}
+}
+
+function updateHashTab(name) {
+  const url = new URL(window.location.href);
+  url.hash = name;
+  return url;
+}
+
+function initTabs() {
+  const bar = document.getElementById("tabbar");
+  if (!bar) return;
+  bar.addEventListener("click", (e) => {
+    const btn = e.target.closest(".tab");
+    if (btn) switchTab(btn.dataset.tab);
+  });
+  // Arrow-key navigation across the tablist (a11y).
+  bar.addEventListener("keydown", (e) => {
+    if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+    const tabs = [...bar.querySelectorAll(".tab")];
+    const i = tabs.findIndex((t) => t.getAttribute("aria-selected") === "true");
+    const next = e.key === "ArrowRight" ? (i + 1) % tabs.length : (i - 1 + tabs.length) % tabs.length;
+    tabs[next].focus();
+    switchTab(tabs[next].dataset.tab);
+  });
+  // Open the tab from the URL hash (deep link), else default to Run.
+  const fromHash = (window.location.hash || "").replace("#", "");
+  const valid = ["run", "results", "history", "compare", "validate"];
+  switchTab(valid.includes(fromHash) ? fromHash : "run");
 }
 
 // p50/p95 latency across the run, shown in a KPI card. Real signal once you
@@ -618,9 +677,15 @@ async function loadHistory() {
     tr.draggable = true;
     tr.dataset.runId = r.id;
     tr.title = "Drag into a slot above — or click to add to the diff";
+    const ds = (r.dataset || "").replace(/\.ya?ml$/i, "") || "—";
+    const label = r.label ? esc(r.label) : "—";
+    // Searchable haystack for the history filter.
+    tr.dataset.hay = `${r.provider} ${r.model} ${ds} ${r.label || ""}`.toLowerCase();
     tr.innerHTML = `<td><a class="link-btn run-link" data-run-id="${r.id}" title="Open this run">#${r.id}</a></td>
-      <td>${(r.timestamp || "").replace("T", " ").replace("+00:00", "")}</td>
-      <td>${r.provider}/${r.model}</td>
+      <td title="${esc(r.timestamp || "")}">${relTime(r.timestamp)}</td>
+      <td>${esc(r.provider)}/${esc(r.model)}</td>
+      <td>${esc(ds)}</td>
+      <td>${label}</td>
       <td>${Math.round(r.pass_rate * 100)}%</td>
       <td>${r.avg_score.toFixed(2)}</td>
       <td>$${(r.cost_usd || 0).toFixed(4)}</td>`;
@@ -650,6 +715,34 @@ async function loadHistory() {
   });
   refreshSlots();
   renderTrend(runs);
+  applyHistoryFilter();
+}
+
+// Relative timestamp ("2m ago", "3h ago", "5d ago") from an ISO string, so the
+// history reads at a glance instead of a wall of identical wall-clock stamps.
+function relTime(iso) {
+  if (!iso) return "—";
+  const t = Date.parse(iso.endsWith("Z") || iso.includes("+") ? iso : iso + "Z");
+  if (Number.isNaN(t)) return iso;
+  const s = Math.max(0, (Date.now() - t) / 1000);
+  if (s < 60) return "just now";
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  return `${Math.floor(s / 86400)}d ago`;
+}
+
+// Filter the history table by the search box (provider / dataset / label).
+function applyHistoryFilter() {
+  const q = (document.getElementById("historySearch")?.value || "").trim().toLowerCase();
+  const rows = [...document.querySelectorAll("#history tbody tr")];
+  let shown = 0;
+  rows.forEach((tr) => {
+    const vis = !q || (tr.dataset.hay || "").includes(q);
+    tr.hidden = !vis;
+    if (vis) shown++;
+  });
+  const c = document.getElementById("historyCount");
+  if (c) c.textContent = shown === rows.length ? `${rows.length} runs` : `${shown} / ${rows.length} runs`;
 }
 
 function renderTrend(runs) {
@@ -1503,12 +1596,12 @@ function svgToPng(svg, filename, scale = 2) {
 // 60-second guided tour
 // =====================================================================
 const TOUR = [
-  { sel: "#provider", title: "Pick a provider", body: "Choose which model runs the golden dataset. This demo ships deterministic mock providers so results are free and reproducible \u2014 no API key." },
-  { sel: "#metrics", title: "Choose your metrics", body: "Each metric scores an answer differently: exact match, similarity, an LLM judge, and a hallucination check. Toggle whichever you care about." },
-  { sel: "#runBtn", title: "Run the evaluation", body: "Cases stream back one at a time. Watch the progress bar tally passes and fails live as the run completes." },
-  { sel: "#resultsPanel", title: "Read the results", body: "The bold metric is the one that gates a case's pass/fail. Click any row to see the input, model output, and expected answer \u2014 or re-run a single case." },
-  { sel: "#comparePanel", title: "Compare providers", body: "Run two providers over the same golden cases and see exactly where they diverge, case by case." },
-  { sel: "#trend", title: "Track quality over time", body: "Every stored run feeds the trend chart. Drag any two runs into the diff slots to see exactly which cases flipped." },
+  { sel: "#provider", tab: "run", title: "Pick a provider", body: "Choose which model runs the golden dataset. This demo ships deterministic mock providers so results are free and reproducible \u2014 no API key." },
+  { sel: "#metrics", tab: "run", title: "Choose your metrics", body: "Each metric scores an answer differently: exact match, similarity, an LLM judge, and a hallucination check. Toggle whichever you care about." },
+  { sel: "#runBtn", tab: "run", title: "Run the evaluation", body: "Cases stream back one at a time. Watch the progress bar tally passes and fails live as the run completes." },
+  { sel: "#resultsEmpty", tab: "results", title: "Read the results", body: "The bold metric is the one that gates a case's pass/fail. Click any row to see the input, model output, and expected answer \u2014 or re-run a single case." },
+  { sel: "#comparePanel", tab: "compare", title: "Compare providers", body: "Run two providers over the same golden cases and see exactly where they diverge, case by case." },
+  { sel: "#trend", tab: "history", title: "Track quality over time", body: "Every stored run feeds the trend chart. Drag any two runs into the diff slots to see exactly which cases flipped." },
 ];
 let _tourIdx = 0;
 
@@ -1539,7 +1632,10 @@ function initTour() {
   // First-time visitors get the tour offered once, automatically. After they
   // finish or skip it we set a flag so it never auto-opens again (it stays
   // available on demand via the tour button).
-  if (!tourSeen()) setTimeout(() => { if (!tourSeen()) startTour(); }, 900);
+  // Auto-open once for first-time visitors, but not when they deep-linked to a
+  // specific tab or run (they came for that, not the tour).
+  const deepLinked = !!(window.location.hash || new URLSearchParams(window.location.search).get("run"));
+  if (!tourSeen() && !deepLinked) setTimeout(() => { if (!tourSeen()) startTour(); }, 900);
 }
 
 function startTour() {
@@ -1558,6 +1654,7 @@ function stepTour(dir) {
 
 function showTourStep() {
   const step = TOUR[_tourIdx];
+  if (step.tab) switchTab(step.tab);
   const target = document.querySelector(step.sel);
   $("#tour-step").textContent = `Step ${_tourIdx + 1} of ${TOUR.length}`;
   $("#tour-title").textContent = step.title;
