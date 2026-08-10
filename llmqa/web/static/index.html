@@ -40,9 +40,10 @@
 </header>
 
 <main id="main">
-  <section class="lede">
+  <section class="lede lede--hero">
+    <div class="hero-copy">
     <p class="edition">Open Source · MIT Licensed · v0.1</p>
-    <p class="standfirst">LLMQA is an open-source harness for making LLM quality
+    <p class="standfirst"><span class="dropcap">L</span>LMQA is an open-source harness for making LLM quality
       <em>measurable, reviewable, and gate-able in CI</em> — free, key-optional,
       and provider-agnostic. Point it at a golden dataset, pick your metrics, and
       get a pass/fail report with quality gates and regression detection so a
@@ -58,6 +59,33 @@
       provider only — no API key, no cost. Clone the repo and add your own
       <code>ANTHROPIC_API_KEY</code>, <code>OPENAI_API_KEY</code>, or
       <code>XAI_API_KEY</code> to evaluate live models.</p>
+    </div>
+
+    <!-- Live hero demo: a self-running mini evaluation. Rows stream in with
+         PASS/FAIL verdicts, the pass rate ticks up, and a sparkline shows a
+         run history ending on a regression dip. Uses canned mock data so it
+         needs no server round-trip; honors prefers-reduced-motion. -->
+    <aside class="hero-demo" id="heroDemo" aria-label="example evaluation">
+      <div class="hd-window">
+        <div class="hd-head">
+          <span class="hd-dot" aria-hidden="true"></span>
+          <span class="hd-title">llmqa run --provider mock --min-pass-rate 0.80</span>
+        </div>
+        <div class="hd-body">
+          <div class="hd-stats">
+            <span class="hd-stat"><span class="hd-k">pass rate</span><span class="hd-v" id="hd-rate">—</span></span>
+            <span class="hd-stat"><span class="hd-k">avg score</span><span class="hd-v" id="hd-score">—</span></span>
+            <span class="hd-gate" id="hd-gate"></span>
+          </div>
+          <ul class="hd-rows" id="hd-rows" aria-live="polite"></ul>
+          <div class="hd-trend">
+            <span class="hd-trend-label">quality trend</span>
+            <div id="hd-spark" class="hd-spark" aria-label="quality trend across recent runs"></div>
+          </div>
+        </div>
+      </div>
+      <p class="hd-caption">A real <code>mock</code> run — the same report you get in your terminal and CI.</p>
+    </aside>
   </section>
 
   <section class="panel">
@@ -128,5 +156,6 @@
 <script src="/assets/theme.js"></script>
 <script src="/assets/pwa.js" defer></script>
 <script src="/assets/prefetch.js" defer></script>
+<script src="/assets/hero.js" defer></script>
 </body>
 </html>
