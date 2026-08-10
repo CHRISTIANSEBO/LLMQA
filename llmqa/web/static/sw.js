@@ -1,13 +1,19 @@
-/* LLMQA service worker.
+/* LLMQA service worker — enhanced PWA version.
  *
- * Minimal by design: its main job is to make the site installable as a PWA
- * (Chrome/Edge require a service worker with a fetch handler) and to serve the
- * app shell offline. It uses a small precache for the static shell and a
- * network-first strategy for navigations, always bypassing /api/* so live
- * evaluation calls are never cached/stale.
+ * Features:
+ * - Versioned cache for easy updates
+ * - Offline shell + last-known-good data for /api/history and /api/config
+ * - Network-first for navigations and critical API data
+ * - Cache-first for static assets with background refresh
+ * - Explicit bypass for live /api/run and other mutating endpoints
+ * - Update notification support via postMessage
  */
-const CACHE = "llmqa-shell-v1";
-const SHELL = [
+
+const VERSION = "llmqa-pwa-v2";
+const SHELL_CACHE = `${VERSION}-shell`;
+const DATA_CACHE = `${VERSION}-data`;
+
+const SHELL_ASSETS = [
   "/dashboard",
   "/assets/app.css",
   "/assets/app.js",
@@ -21,58 +27,108 @@ const SHELL = [
   "/manifest.webmanifest",
 ];
 
+// Endpoints we want to cache for offline use (last known good)
+const CACHEABLE_DATA_PATHS = ["/api/config", "/api/history"];
+
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting())
+    caches.open(SHELL_CACHE)
+      .then((cache) => cache.addAll(SHELL_ASSETS))
+      .then(() => self.skipWaiting())
   );
 });
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))
+      Promise.all(
+        keys
+          .filter((key) => !key.startsWith(VERSION))
+          .map((key) => caches.delete(key))
+      )
     ).then(() => self.clients.claim())
   );
+});
+
+// Helper: notify all clients of an available update
+function notifyClientsOfUpdate() {
+  self.clients.matchAll({ type: "window" }).then((clients) => {
+    clients.forEach((client) => {
+      client.postMessage({ type: "SW_UPDATE_AVAILABLE" });
+    });
+  });
+}
+
+self.addEventListener("message", (event) => {
+  if (event.data && event.data.type === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
 });
 
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET") return;
+
   const url = new URL(req.url);
-
-  // Never intercept API calls — always hit the network for live data.
-  if (url.pathname.startsWith("/api/")) return;
-
-  // Same-origin only.
   if (url.origin !== self.location.origin) return;
 
-  // Navigations: network-first, fall back to cached shell when offline.
+  // Never cache live evaluation runs or mutating calls
+  if (url.pathname.startsWith("/api/run")) return;
+
+  // === Data endpoints: network-first with offline fallback ===
+  if (CACHEABLE_DATA_PATHS.some((p) => url.pathname.startsWith(p))) {
+    event.respondWith(
+      fetch(req)
+        .then((resp) => {
+          if (resp && resp.status === 200) {
+            const copy = resp.clone();
+            caches.open(DATA_CACHE).then((c) => c.put(req, copy)).catch(() => {});
+          }
+          return resp;
+        })
+        .catch(() => caches.match(req))
+    );
+    return;
+  }
+
+  // === API calls (non-cached): always network ===
+  if (url.pathname.startsWith("/api/")) return;
+
+  // === Navigations: network-first, fallback to cached shell ===
   if (req.mode === "navigate") {
     event.respondWith(
       fetch(req)
         .then((resp) => {
           const copy = resp.clone();
-          caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => {});
+          caches.open(SHELL_CACHE).then((c) => c.put(req, copy)).catch(() => {});
           return resp;
         })
-        .catch(() => caches.match(req).then((r) => r || caches.match("/dashboard")))
+        .catch(() =>
+          caches.match(req).then((r) => r || caches.match("/dashboard"))
+        )
     );
     return;
   }
 
-  // Static assets: cache-first with background refresh.
+  // === Static assets: cache-first with background refresh ===
   event.respondWith(
     caches.match(req).then((cached) => {
-      const network = fetch(req)
+      const networkFetch = fetch(req)
         .then((resp) => {
           if (resp && resp.status === 200) {
             const copy = resp.clone();
-            caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => {});
+            caches.open(SHELL_CACHE).then((c) => c.put(req, copy)).catch(() => {});
           }
           return resp;
         })
         .catch(() => cached);
-      return cached || network;
+
+      return cached || networkFetch;
     })
   );
+});
+
+// Optional: notify on new SW ready (can be triggered from activate if desired)
+self.addEventListener("controllerchange", () => {
+  // Could notify here, but we use message-based flow instead
 });

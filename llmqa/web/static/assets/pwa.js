@@ -169,8 +169,67 @@
     deferredPrompt = null;
   });
 
+  // ---- Service Worker update handling --------------------------------
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.addEventListener("message", (event) => {
+      if (event.data && event.data.type === "SW_UPDATE_AVAILABLE") {
+        showUpdateToast();
+      }
+    });
+
+    // Also check on load in case SW is already waiting
+    navigator.serviceWorker.ready.then((reg) => {
+      if (reg.waiting) showUpdateToast();
+    });
+  }
+
+  function showUpdateToast() {
+    if (document.getElementById("pwa-update-toast")) return;
+    const toast = document.createElement("div");
+    toast.id = "pwa-update-toast";
+    toast.className = "pwa-update-toast";
+    toast.innerHTML =
+      '<div class="pwa-toast-content">' +
+      '<span>New version ready.</span>' +
+      '<button class="run pwa-update-btn">Reload</button>' +
+      '<button class="link-btn pwa-update-dismiss">✕</button>' +
+      '</div>';
+    document.body.appendChild(toast);
+
+    toast.querySelector(".pwa-update-btn").addEventListener("click", () => {
+      if (navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({ type: "SKIP_WAITING" });
+      }
+      window.location.reload();
+    });
+    toast.querySelector(".pwa-update-dismiss").addEventListener("click", () => toast.remove());
+  }
+
+  // ---- Offline banner (simple, non-intrusive) -------------------------
+  function showOfflineBanner() {
+    if (document.getElementById("pwa-offline-banner")) return;
+    const banner = document.createElement("div");
+    banner.id = "pwa-offline-banner";
+    banner.className = "pwa-offline-banner";
+    banner.textContent = "Offline — showing cached data";
+    document.body.appendChild(banner);
+    setTimeout(() => banner.classList.add("visible"), 10);
+  }
+
+  window.addEventListener("online", () => {
+    const b = document.getElementById("pwa-offline-banner");
+    if (b) b.remove();
+  });
+  window.addEventListener("offline", () => {
+    // Only show if we have cached data capability
+    if (navigator.serviceWorker.controller) showOfflineBanner();
+  });
+
   document.addEventListener("DOMContentLoaded", () => {
     if (isStandalone()) { hideEntryPoints(); return; }
     showEntryPoints();
+
+    // Show offline banner immediately if already offline
+    if (!navigator.onLine) showOfflineBanner();
   });
 })();
