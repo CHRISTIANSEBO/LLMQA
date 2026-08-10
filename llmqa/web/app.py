@@ -16,6 +16,7 @@ from __future__ import annotations
 import json as _json
 import logging
 import os
+import threading
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -24,7 +25,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -33,13 +34,14 @@ from ..catalog import list_datasets, resolve_dataset_name
 from ..exceptions import ConfigError, DatasetError, LLMQAError, MissingAPIKeyError
 from ..metrics import REGISTRY, build_metric
 from ..providers import MOCK_PROVIDERS, get_provider
-from ..runner import iter_eval, load_dataset, run_eval
+from ..runner import iter_eval, load_dataset, parse_dataset_text, run_eval
 from ..store import get_run, list_runs, save_run
 from .security import (
     SecurityHeadersMiddleware,
     check_provider_allowed,
     enforce_body_limit,
     guard_mutation,
+    require_auth,
 )
 
 ROOT = Path(__file__).resolve().parent
@@ -187,9 +189,32 @@ def _clamp_concurrency(value: int) -> int:
     return max(1, min(int(value or 1), MAX_CONCURRENCY))
 
 
+# --- Lightweight in-process metrics (no external dependency) ----------------
+# Just enough for a self-hoster to scrape run volume, quality, and spend without
+# pulling in a metrics client. Reset on restart; scrape via GET /metrics.
+_METRICS = {
+    "runs_total": 0,
+    "cases_total": 0,
+    "cases_passed_total": 0,
+    "cost_usd_total": 0.0,
+}
+_METRICS_LOCK = threading.Lock()
+
+
+def _record_metrics(run) -> None:
+    """Fold a completed EvalRun into the process metrics counters."""
+    if run is None:
+        return
+    with _METRICS_LOCK:
+        _METRICS["runs_total"] += 1
+        _METRICS["cases_total"] += len(run.results)
+        _METRICS["cases_passed_total"] += sum(1 for r in run.results if r.passed)
+        _METRICS["cost_usd_total"] += run.total_cost_usd
+
+
 @app.get("/api/health")
-def health() -> dict:
-    return {
+def health(deep: bool = False) -> dict:
+    payload = {
         "status": "ok",
         "version": app.version,
         "keys_detected": {
@@ -201,6 +226,55 @@ def health() -> dict:
         + ( ["anthropic"] if os.environ.get("ANTHROPIC_API_KEY") else [] )
         + ( ["openai"] if os.environ.get("OPENAI_API_KEY") else [] )
         + ( ["xai"] if os.environ.get("XAI_API_KEY") else [] ),
+    }
+    if deep:
+        # Cheap liveness probe: can we load the default dataset and does the
+        # deterministic mock provider actually answer? No paid calls are made.
+        checks: dict[str, dict] = {}
+        try:
+            n = len(load_dataset(DEFAULT_DATASET))
+            checks["dataset"] = {"ok": True, "cases": n}
+        except Exception as exc:  # noqa: BLE001 - health must never raise
+            checks["dataset"] = {"ok": False, "error": str(exc)}
+        try:
+            resp = _get_cached_provider("mock").generate("healthcheck ping")
+            checks["mock_provider"] = {"ok": bool(resp.text is not None)}
+        except Exception as exc:  # noqa: BLE001
+            checks["mock_provider"] = {"ok": False, "error": str(exc)}
+        payload["checks"] = checks
+        payload["status"] = "ok" if all(c.get("ok") for c in checks.values()) else "degraded"
+    return payload
+
+
+class ValidateDatasetRequest(BaseModel):
+    # Raw YAML/JSON text of a dataset (a list of cases). Capped by the body
+    # limit + this length so a paste can't be abused.
+    content: str = Field(min_length=1, max_length=200_000)
+
+
+@app.post("/api/validate-dataset")
+async def validate_dataset(req: ValidateDatasetRequest, request: Request) -> dict:
+    """Validate a pasted/uploaded dataset without persisting it.
+
+    Returns a per-case summary on success (so the UI can preview what would
+    run), or a 400 with the same actionable message the CLI gives. The dataset
+    is never written to disk; running it is a separate, in-memory concern.
+    """
+    await enforce_body_limit(request)
+    require_auth(request)
+    try:
+        cases = parse_dataset_text(req.content, label="uploaded dataset")
+    except LLMQAError as exc:
+        raise _http_from_llmqa_error(exc) from exc
+    return {
+        "valid": True,
+        "count": len(cases),
+        "cases": [
+            {"id": c.id, "input": c.input, "expected": c.expected,
+             "tags": c.tags, "has_context": bool(c.context),
+             "gate_metrics": c.gate_metrics}
+            for c in cases
+        ],
     }
 
 
@@ -261,6 +335,32 @@ def history(limit: int = 50) -> dict:
     return {"runs": list_runs(DB_PATH, limit=limit)}
 
 
+@app.get("/metrics")
+def metrics() -> Response:
+    """Prometheus text-format metrics for self-hosted monitoring.
+
+    Process-local counters (reset on restart): run/case volume, cumulative
+    passes, and cumulative cost. No external metrics dependency.
+    """
+    with _METRICS_LOCK:
+        m = dict(_METRICS)
+    lines = [
+        "# HELP llmqa_runs_total Evaluations run since start.",
+        "# TYPE llmqa_runs_total counter",
+        f"llmqa_runs_total {m['runs_total']}",
+        "# HELP llmqa_cases_total Cases evaluated since start.",
+        "# TYPE llmqa_cases_total counter",
+        f"llmqa_cases_total {m['cases_total']}",
+        "# HELP llmqa_cases_passed_total Cases that passed since start.",
+        "# TYPE llmqa_cases_passed_total counter",
+        f"llmqa_cases_passed_total {m['cases_passed_total']}",
+        "# HELP llmqa_cost_usd_total Cumulative provider cost (USD) since start.",
+        "# TYPE llmqa_cost_usd_total counter",
+        f"llmqa_cost_usd_total {m['cost_usd_total']:.6f}",
+    ]
+    return Response("\n".join(lines) + "\n", media_type="text/plain; version=0.0.4")
+
+
 @app.get("/api/runs/{run_id}")
 def run_detail(run_id: int) -> dict:
     run = get_run(run_id, DB_PATH)
@@ -301,6 +401,7 @@ async def run(req: RunRequest, request: Request) -> dict:
     )
 
     run_id = save_run(eval_run, DB_PATH) if req.store else None
+    _record_metrics(eval_run)
 
     payload = eval_run.model_dump()
     payload["pass_rate"] = eval_run.pass_rate
@@ -360,6 +461,7 @@ async def run_stream(req: RunRequest, request: Request):
             yield f"data: {_json.dumps({'type': 'case', 'result': case_data})}\n\n"
 
         run_id = save_run(run, DB_PATH) if (store and run is not None) else None
+        _record_metrics(run)
         summary = {
             "type": "done",
             "pass_rate": run.pass_rate if run else 0.0,
@@ -404,6 +506,7 @@ async def compare(req: CompareRequest, request: Request) -> dict:
             for name in req.metrics
         ]
         eval_run = run_eval(dataset, provider, metrics, tags=req.tags)
+        _record_metrics(eval_run)
         payload = eval_run.model_dump()
         payload["pass_rate"] = eval_run.pass_rate
         payload["avg_score"] = eval_run.avg_score
