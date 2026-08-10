@@ -14,13 +14,19 @@ ships as a single service (good for Railway).
 from __future__ import annotations
 
 import json as _json
+import logging
 import os
+import threading
+import time
+import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -29,13 +35,14 @@ from ..catalog import list_datasets, resolve_dataset_name
 from ..exceptions import ConfigError, DatasetError, LLMQAError, MissingAPIKeyError
 from ..metrics import REGISTRY, build_metric
 from ..providers import MOCK_PROVIDERS, get_provider
-from ..runner import iter_eval, load_dataset, run_eval
+from ..runner import iter_eval, load_dataset, parse_dataset_text, run_eval
 from ..store import get_run, list_runs, save_run
 from .security import (
     SecurityHeadersMiddleware,
     check_provider_allowed,
     enforce_body_limit,
     guard_mutation,
+    require_auth,
 )
 
 ROOT = Path(__file__).resolve().parent
@@ -86,6 +93,30 @@ if _origins:
 # frame-deny, and HSTS behind TLS). Cheap hardening for a public deploy; see
 # SecurityHeadersMiddleware for the exact policy and its env overrides.
 app.add_middleware(SecurityHeadersMiddleware)
+
+_access_log = logging.getLogger("llmqa.web.access")
+
+
+@app.middleware("http")
+async def request_logging(request: Request, call_next):
+    """Structured access logging with a per-request id.
+
+    Assigns/propagates an ``X-Request-ID`` (accepts an inbound one from a proxy)
+    and logs method, path, status, and duration. Quiet by default — set
+    ``LLMQA_LOG_LEVEL=INFO`` (or DEBUG) to see it. Static/asset noise is skipped.
+    """
+    req_id = request.headers.get("x-request-id") or uuid.uuid4().hex[:12]
+    start = time.perf_counter()
+    response = await call_next(request)
+    response.headers.setdefault("X-Request-ID", req_id)
+    path = request.url.path
+    if not path.startswith("/assets"):
+        dur_ms = (time.perf_counter() - start) * 1000
+        _access_log.info(
+            "%s %s -> %s (%.1fms)", request.method, path, response.status_code, dur_ms,
+            extra={"request_id": req_id},
+        )
+    return response
 
 
 def _http_from_llmqa_error(exc: LLMQAError) -> HTTPException:
@@ -159,9 +190,32 @@ def _clamp_concurrency(value: int) -> int:
     return max(1, min(int(value or 1), MAX_CONCURRENCY))
 
 
+# --- Lightweight in-process metrics (no external dependency) ----------------
+# Just enough for a self-hoster to scrape run volume, quality, and spend without
+# pulling in a metrics client. Reset on restart; scrape via GET /metrics.
+_METRICS = {
+    "runs_total": 0,
+    "cases_total": 0,
+    "cases_passed_total": 0,
+    "cost_usd_total": 0.0,
+}
+_METRICS_LOCK = threading.Lock()
+
+
+def _record_metrics(run) -> None:
+    """Fold a completed EvalRun into the process metrics counters."""
+    if run is None:
+        return
+    with _METRICS_LOCK:
+        _METRICS["runs_total"] += 1
+        _METRICS["cases_total"] += len(run.results)
+        _METRICS["cases_passed_total"] += sum(1 for r in run.results if r.passed)
+        _METRICS["cost_usd_total"] += run.total_cost_usd
+
+
 @app.get("/api/health")
-def health() -> dict:
-    return {
+def health(deep: bool = False) -> dict:
+    payload = {
         "status": "ok",
         "version": app.version,
         "keys_detected": {
@@ -173,6 +227,55 @@ def health() -> dict:
         + ( ["anthropic"] if os.environ.get("ANTHROPIC_API_KEY") else [] )
         + ( ["openai"] if os.environ.get("OPENAI_API_KEY") else [] )
         + ( ["xai"] if os.environ.get("XAI_API_KEY") else [] ),
+    }
+    if deep:
+        # Cheap liveness probe: can we load the default dataset and does the
+        # deterministic mock provider actually answer? No paid calls are made.
+        checks: dict[str, dict] = {}
+        try:
+            n = len(load_dataset(DEFAULT_DATASET))
+            checks["dataset"] = {"ok": True, "cases": n}
+        except Exception as exc:  # noqa: BLE001 - health must never raise
+            checks["dataset"] = {"ok": False, "error": str(exc)}
+        try:
+            resp = _get_cached_provider("mock").generate("healthcheck ping")
+            checks["mock_provider"] = {"ok": bool(resp.text is not None)}
+        except Exception as exc:  # noqa: BLE001
+            checks["mock_provider"] = {"ok": False, "error": str(exc)}
+        payload["checks"] = checks
+        payload["status"] = "ok" if all(c.get("ok") for c in checks.values()) else "degraded"
+    return payload
+
+
+class ValidateDatasetRequest(BaseModel):
+    # Raw YAML/JSON text of a dataset (a list of cases). Capped by the body
+    # limit + this length so a paste can't be abused.
+    content: str = Field(min_length=1, max_length=200_000)
+
+
+@app.post("/api/validate-dataset")
+async def validate_dataset(req: ValidateDatasetRequest, request: Request) -> dict:
+    """Validate a pasted/uploaded dataset without persisting it.
+
+    Returns a per-case summary on success (so the UI can preview what would
+    run), or a 400 with the same actionable message the CLI gives. The dataset
+    is never written to disk; running it is a separate, in-memory concern.
+    """
+    await enforce_body_limit(request)
+    require_auth(request)
+    try:
+        cases = parse_dataset_text(req.content, label="uploaded dataset")
+    except LLMQAError as exc:
+        raise _http_from_llmqa_error(exc) from exc
+    return {
+        "valid": True,
+        "count": len(cases),
+        "cases": [
+            {"id": c.id, "input": c.input, "expected": c.expected,
+             "tags": c.tags, "has_context": bool(c.context),
+             "gate_metrics": c.gate_metrics}
+            for c in cases
+        ],
     }
 
 
@@ -233,6 +336,32 @@ def history(limit: int = 50) -> dict:
     return {"runs": list_runs(DB_PATH, limit=limit)}
 
 
+@app.get("/metrics")
+def metrics() -> Response:
+    """Prometheus text-format metrics for self-hosted monitoring.
+
+    Process-local counters (reset on restart): run/case volume, cumulative
+    passes, and cumulative cost. No external metrics dependency.
+    """
+    with _METRICS_LOCK:
+        m = dict(_METRICS)
+    lines = [
+        "# HELP llmqa_runs_total Evaluations run since start.",
+        "# TYPE llmqa_runs_total counter",
+        f"llmqa_runs_total {m['runs_total']}",
+        "# HELP llmqa_cases_total Cases evaluated since start.",
+        "# TYPE llmqa_cases_total counter",
+        f"llmqa_cases_total {m['cases_total']}",
+        "# HELP llmqa_cases_passed_total Cases that passed since start.",
+        "# TYPE llmqa_cases_passed_total counter",
+        f"llmqa_cases_passed_total {m['cases_passed_total']}",
+        "# HELP llmqa_cost_usd_total Cumulative provider cost (USD) since start.",
+        "# TYPE llmqa_cost_usd_total counter",
+        f"llmqa_cost_usd_total {m['cost_usd_total']:.6f}",
+    ]
+    return Response("\n".join(lines) + "\n", media_type="text/plain; version=0.0.4")
+
+
 @app.get("/api/runs/{run_id}")
 def run_detail(run_id: int) -> dict:
     run = get_run(run_id, DB_PATH)
@@ -272,7 +401,10 @@ async def run(req: RunRequest, request: Request) -> dict:
         max_cost_usd=req.max_cost_usd,
     )
 
-    run_id = save_run(eval_run, DB_PATH) if req.store else None
+    # Offload the SQLite write to a worker thread so a slow disk can't block the
+    # event loop while other requests are in flight.
+    run_id = (await run_in_threadpool(save_run, eval_run, DB_PATH)) if req.store else None
+    _record_metrics(eval_run)
 
     payload = eval_run.model_dump()
     payload["pass_rate"] = eval_run.pass_rate
@@ -332,6 +464,7 @@ async def run_stream(req: RunRequest, request: Request):
             yield f"data: {_json.dumps({'type': 'case', 'result': case_data})}\n\n"
 
         run_id = save_run(run, DB_PATH) if (store and run is not None) else None
+        _record_metrics(run)
         summary = {
             "type": "done",
             "pass_rate": run.pass_rate if run else 0.0,
@@ -359,32 +492,43 @@ async def compare(req: CompareRequest, request: Request) -> dict:
     for prov_name in req.providers:
         check_provider_allowed(prov_name)
 
-    all_runs: dict[str, dict] = {}
+    # Validate metric names once up front so a bad request fails fast (before
+    # spending any compute) with a clear 400.
+    for name in req.metrics:
+        if name not in REGISTRY:
+            raise HTTPException(status_code=400, detail=f"Unknown metric {name!r}")
 
-    for prov_name in req.providers:
-        try:
-            provider = _get_cached_provider(prov_name)
-        except LLMQAError as exc:
-            raise _http_from_llmqa_error(exc) from exc
+    dataset = resolve_dataset_name(req.dataset)
 
-        metrics = []
-        for name in req.metrics:
-            if name not in REGISTRY:
-                raise HTTPException(status_code=400, detail=f"Unknown metric {name!r}")
-            if name in ("llm_judge", "hallucination"):
-                metrics.append(build_metric(name, judge=provider))
-            else:
-                metrics.append(build_metric(name))
-
-        eval_run = run_eval(resolve_dataset_name(req.dataset), provider, metrics, tags=req.tags)
-
+    def _run_one(prov_name: str) -> dict:
+        provider = _get_cached_provider(prov_name)
+        metrics = [
+            build_metric(name, judge=provider)
+            if name in ("llm_judge", "hallucination")
+            else build_metric(name)
+            for name in req.metrics
+        ]
+        eval_run = run_eval(dataset, provider, metrics, tags=req.tags)
+        _record_metrics(eval_run)
         payload = eval_run.model_dump()
         payload["pass_rate"] = eval_run.pass_rate
         payload["avg_score"] = eval_run.avg_score
         payload["score_by_metric"] = eval_run.score_by_metric()
         for case_payload, case_result in zip(payload["results"], eval_run.results, strict=False):
             case_payload["passed"] = case_result.passed
-        all_runs[prov_name] = payload
+        return payload
+
+    # Run the providers concurrently: each is an independent, I/O-bound eval, so
+    # comparing two real models no longer takes the sum of their latencies.
+    all_runs: dict[str, dict] = {}
+    with ThreadPoolExecutor(max_workers=len(req.providers)) as ex:
+        futures = {ex.submit(_run_one, p): p for p in req.providers}
+        for fut in as_completed(futures):
+            prov_name = futures[fut]
+            try:
+                all_runs[prov_name] = fut.result()
+            except LLMQAError as exc:
+                raise _http_from_llmqa_error(exc) from exc
 
     return {"runs": all_runs, "providers": req.providers}
 
@@ -399,8 +543,35 @@ PAGES = {
     "/about": "about.html",
 }
 
+class CachedStaticFiles(StaticFiles):
+    """StaticFiles that adds a revalidating Cache-Control to every asset.
+
+    StaticFiles already emits ETag + Last-Modified, so the browser can send a
+    conditional request and get a cheap 304 instead of re-downloading. We add a
+    short max-age so repeat visits skip even the revalidation round-trip for a
+    while, without risking stale assets for long (no content hashing yet).
+    Tune with LLMQA_ASSET_MAX_AGE (seconds).
+    """
+
+    def __init__(self, *args, max_age: int = 3600, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self._max_age = max_age
+
+    async def get_response(self, path: str, scope):
+        response = await super().get_response(path, scope)
+        response.headers.setdefault(
+            "Cache-Control", f"public, max-age={self._max_age}, must-revalidate"
+        )
+        return response
+
+
 if STATIC_DIR.exists():
-    app.mount("/assets", StaticFiles(directory=STATIC_DIR / "assets"), name="assets")
+    _asset_max_age = int(os.environ.get("LLMQA_ASSET_MAX_AGE", "3600"))
+    app.mount(
+        "/assets",
+        CachedStaticFiles(directory=STATIC_DIR / "assets", max_age=_asset_max_age),
+        name="assets",
+    )
 
     def _page(name: str) -> FileResponse:
         return FileResponse(STATIC_DIR / name)

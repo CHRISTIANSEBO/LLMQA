@@ -5,18 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>LLMQA — LLM Quality Assurance</title>
 <meta name="description" content="LLMQA is an open-source harness for making LLM quality measurable, reviewable, and gate-able in CI — free, key-optional, and provider-agnostic." />
-<script>
-  /* Set the theme before paint to avoid a flash of the wrong palette.
-     Only an explicit stored choice is applied here; otherwise CSS follows the
-     OS via prefers-color-scheme. */
-  (function () {
-    try {
-      var t = localStorage.getItem("llmqa-theme");
-      if (t === "light" || t === "dark")
-        document.documentElement.setAttribute("data-theme", t);
-    } catch (e) {}
-  })();
-</script>
+<script src="/assets/theme-init.js"></script>
 <link rel="stylesheet" href="/assets/app.css" />
 <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg" />
 <link rel="manifest" href="/manifest.webmanifest" />
@@ -51,9 +40,10 @@
 </header>
 
 <main id="main">
-  <section class="lede">
+  <section class="lede lede--hero">
+    <div class="hero-copy">
     <p class="edition">Open Source · MIT Licensed · v0.1</p>
-    <p class="standfirst">LLMQA is an open-source harness for making LLM quality
+    <p class="standfirst"><span class="dropcap">L</span>LMQA is an open-source harness for making LLM quality
       <em>measurable, reviewable, and gate-able in CI</em> — free, key-optional,
       and provider-agnostic. Point it at a golden dataset, pick your metrics, and
       get a pass/fail report with quality gates and regression detection so a
@@ -69,6 +59,33 @@
       provider only — no API key, no cost. Clone the repo and add your own
       <code>ANTHROPIC_API_KEY</code>, <code>OPENAI_API_KEY</code>, or
       <code>XAI_API_KEY</code> to evaluate live models.</p>
+    </div>
+
+    <!-- Live hero demo: a self-running mini evaluation. Rows stream in with
+         PASS/FAIL verdicts, the pass rate ticks up, and a sparkline shows a
+         run history ending on a regression dip. Uses canned mock data so it
+         needs no server round-trip; honors prefers-reduced-motion. -->
+    <aside class="hero-demo" id="heroDemo" aria-label="example evaluation">
+      <div class="hd-window">
+        <div class="hd-head">
+          <span class="hd-dot" aria-hidden="true"></span>
+          <span class="hd-title">llmqa run --provider mock --min-pass-rate 0.80</span>
+        </div>
+        <div class="hd-body">
+          <div class="hd-stats">
+            <span class="hd-stat"><span class="hd-k">pass rate</span><span class="hd-v" id="hd-rate">—</span></span>
+            <span class="hd-stat"><span class="hd-k">avg score</span><span class="hd-v" id="hd-score">—</span></span>
+            <span class="hd-gate" id="hd-gate"></span>
+          </div>
+          <ul class="hd-rows" id="hd-rows" aria-live="polite"></ul>
+          <div class="hd-trend">
+            <span class="hd-trend-label">quality trend</span>
+            <div id="hd-spark" class="hd-spark" aria-label="quality trend across recent runs"></div>
+          </div>
+        </div>
+      </div>
+      <p class="hd-caption">A real <code>mock</code> run — the same report you get in your terminal and CI.</p>
+    </aside>
   </section>
 
   <section class="panel">
@@ -138,23 +155,7 @@
 <footer>LLMQA v0.1 · open-source LLM evaluation harness · MIT licensed · maintained by <a href="https://github.com/CHRISTIANSEBO" target="_blank" rel="noopener">@CHRISTIANSEBO</a></footer>
 <script src="/assets/theme.js"></script>
 <script src="/assets/pwa.js" defer></script>
-<script>
-  /* Warm the cache for the dashboard's critical resources so it opens fast
-     from the home page. Fire-and-forget on idle; failures are harmless. */
-  (function () {
-    var warm = function () {
-      try {
-        fetch("/api/config", { headers: { "X-Prefetch": "1" } }).catch(function () {});
-        ["/assets/app.js", "/dashboard"].forEach(function (href) {
-          var l = document.createElement("link");
-          l.rel = "prefetch"; l.href = href;
-          document.head.appendChild(l);
-        });
-      } catch (e) {}
-    };
-    if ("requestIdleCallback" in window) requestIdleCallback(warm, { timeout: 2000 });
-    else setTimeout(warm, 1200);
-  })();
-</script>
+<script src="/assets/prefetch.js" defer></script>
+<script src="/assets/hero.js" defer></script>
 </body>
 </html>

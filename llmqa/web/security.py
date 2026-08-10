@@ -182,10 +182,10 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """Attach baseline security headers to every response.
 
     Conservative defaults that don't break the same-origin dashboard:
-    - Content-Security-Policy: self-only, but allowing the inline theme script
-      (via 'unsafe-inline') that every page runs before paint to avoid a
-      flash-of-wrong-theme. Removing 'unsafe-inline' is tracked as a follow-up
-      (move the inline snippet to a hashed file).
+    - Content-Security-Policy: self-only. All scripts are externalized (no
+      inline <script> or on* handlers), so script-src is a strict 'self' with
+      NO 'unsafe-inline'. style-src keeps 'unsafe-inline' for runtime element
+      style properties the charts set.
     - X-Content-Type-Options: nosniff
     - Referrer-Policy: strict-origin-when-cross-origin
     - X-Frame-Options: DENY (clickjacking)
@@ -195,7 +195,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
     DEFAULT_CSP = (
         "default-src 'self'; "
-        "script-src 'self' 'unsafe-inline'; "
+        "script-src 'self'; "
         "style-src 'self' 'unsafe-inline'; "
         "img-src 'self' data:; "
         "connect-src 'self'; "
