@@ -714,7 +714,10 @@ tr.result-row.flash { animation: flashrow 1.1s ease-out; }
 /* Transparent — it only blocks clicks on the page behind the tour. All the
    dimming is done by the highlight ring's spotlight box-shadow below, so the
    ring's interior (the target) stays fully lit. */
-.tour-scrim { position: fixed; inset: 0; background: transparent; z-index: 90; }
+/* The tour highlights a control but must NOT trap the page: pointer-events
+   none lets clicks pass through to the tabs/controls underneath, so the UI
+   never feels frozen while the tour is open. */
+.tour-scrim { position: fixed; inset: 0; background: transparent; z-index: 90; pointer-events: none; }
 /* The ring's giant outer box-shadow is the real spotlight: it darkens the whole
    page while leaving the ring's interior (the target control) at full brightness. */
 .tip { position: absolute; z-index: 92; border: 2px solid var(--paper-edge);

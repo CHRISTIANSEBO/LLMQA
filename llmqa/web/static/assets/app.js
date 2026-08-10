@@ -481,7 +481,11 @@ function initTabs() {
   if (!bar) return;
   bar.addEventListener("click", (e) => {
     const btn = e.target.closest(".tab");
-    if (btn) switchTab(btn.dataset.tab);
+    if (btn) {
+      // A manual tab switch ends any open tour (the user is navigating).
+      if (!$("#tour").hidden) endTour();
+      switchTab(btn.dataset.tab);
+    }
   });
   // Arrow-key navigation across the tablist (a11y).
   bar.addEventListener("keydown", (e) => {
