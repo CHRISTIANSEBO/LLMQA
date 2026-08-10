@@ -38,6 +38,20 @@ def test_asset_cache_control_present():
     assert "max-age=" in cc and "must-revalidate" in cc
 
 
+def test_dashboard_is_tabbed():
+    """The dashboard ships a tablist with the five sections and matching panels,
+    so JS tab-switching + #hash deep links have something to bind to."""
+    html = client.get("/dashboard").text
+    assert 'role="tablist"' in html
+    for tab in ("run", "results", "history", "compare", "validate"):
+        assert f'data-tab="{tab}"' in html, f"missing tab button {tab}"
+        assert f'id="tab-{tab}"' in html, f"missing tab panel {tab}"
+    # History tab surfaces the trend + a searchable history table with the new
+    # identity columns.
+    assert 'id="historySearch"' in html
+    assert ">Dataset<" in html and ">Label<" in html
+
+
 def test_home_hero_demo_wired():
     """The home page ships the live hero demo container + its external script,
     and hero.js is served (external so it complies with the strict CSP)."""

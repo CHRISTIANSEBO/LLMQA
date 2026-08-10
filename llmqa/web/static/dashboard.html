@@ -49,6 +49,15 @@
     <button id="tourBtn" class="link-btn" type="button">▷ Take the 60-second tour</button>
   </section>
 
+  <nav class="tabbar" id="tabbar" role="tablist" aria-label="dashboard sections">
+    <button class="tab" role="tab" data-tab="run" id="tabbtn-run" aria-controls="tab-run" aria-selected="true">Run</button>
+    <button class="tab" role="tab" data-tab="results" id="tabbtn-results" aria-controls="tab-results" aria-selected="false">Results</button>
+    <button class="tab" role="tab" data-tab="history" id="tabbtn-history" aria-controls="tab-history" aria-selected="false">History &amp; trend</button>
+    <button class="tab" role="tab" data-tab="compare" id="tabbtn-compare" aria-controls="tab-compare" aria-selected="false">Compare</button>
+    <button class="tab" role="tab" data-tab="validate" id="tabbtn-validate" aria-controls="tab-validate" aria-selected="false">Validate</button>
+  </nav>
+
+  <div class="tabpanel" id="tab-run" role="tabpanel" aria-labelledby="tabbtn-run">
   <section class="panel controls">
     <h2>Run an evaluation</h2>
     <div class="control-row">
@@ -90,7 +99,10 @@
       </div>
     </div>
   </section>
+  </div><!-- /tab-run -->
 
+  <div class="tabpanel" id="tab-results" role="tabpanel" aria-labelledby="tabbtn-results" hidden>
+  <p id="loadedBanner" class="loaded-banner" hidden></p>
   <section class="cards" id="summary" hidden>
     <div class="card"><span class="k">Pass rate</span><span class="v" id="s-pass">—</span></div>
     <div class="card"><span class="k">Avg score</span><span class="v" id="s-score">—</span></div>
@@ -162,7 +174,9 @@
       </table>
     </div>
   </section>
+  </div><!-- /tab-results -->
 
+  <div class="tabpanel" id="tab-compare" role="tabpanel" aria-labelledby="tabbtn-compare" hidden>
   <section class="panel" id="comparePanel">
     <h2>Compare providers</h2>
     <p class="hint">Run the same dataset through two providers side-by-side and see exactly where they diverge.</p>
@@ -187,7 +201,9 @@
       </div>
     </div>
   </section>
+  </div><!-- /tab-compare -->
 
+  <div class="tabpanel" id="tab-validate" role="tabpanel" aria-labelledby="tabbtn-validate" hidden>
   <section class="panel" id="validatePanel">
     <h2>Validate a dataset</h2>
     <p class="hint">Paste or upload your own golden dataset (YAML or JSON) to check it against
@@ -205,7 +221,9 @@
       placeholder="- id: capital-france&#10;  input: What is the capital of France?&#10;  expected: Paris&#10;  gate_metrics: [exact_match]"></textarea>
     <div id="ds-result" class="ds-result" hidden></div>
   </section>
+  </div><!-- /tab-validate -->
 
+  <div class="tabpanel" id="tab-history" role="tabpanel" aria-labelledby="tabbtn-history" hidden>
   <section class="panel">
     <h2>Quality trend</h2>
     <div id="trend" class="trend">No history yet — run an evaluation.</div>
@@ -219,9 +237,13 @@
       </div>
       <div id="histDiff" class="hist-diff" hidden></div>
     </div>
+    <div class="result-tools">
+      <input id="historySearch" type="search" class="result-search" placeholder="Filter history by provider, dataset, or tag…" aria-label="Filter run history" />
+      <span id="historyCount" class="result-count"></span>
+    </div>
     <div class="table-wrap">
       <table id="history">
-        <thead><tr><th>#</th><th>When</th><th>Provider / model</th><th>Pass</th><th>Avg</th><th>Cost</th></tr></thead>
+        <thead><tr><th>#</th><th>When</th><th>Provider / model</th><th>Dataset</th><th>Label</th><th>Pass</th><th>Avg</th><th>Cost</th></tr></thead>
         <tbody></tbody>
       </table>
     </div>
@@ -234,6 +256,7 @@
       <div id="peek-list" class="peek-list"></div>
     </details>
   </section>
+  </div><!-- /tab-history -->
 </main>
 
 <footer>LLMQA v0.1 · open-source LLM evaluation harness · MIT licensed · maintained by <a href="https://github.com/CHRISTIANSEBO" target="_blank" rel="noopener">@CHRISTIANSEBO</a></footer>
