@@ -29,12 +29,20 @@ def test_pages_served():
 
 def test_every_page_has_theme_toggle_and_no_flash_script():
     """Light/dark theming must be wired on every page: the pre-paint no-flash
-    snippet, the masthead toggle button, and the shared theme.js."""
+    script (now externalized to theme-init.js so the CSP can drop
+    script-src 'unsafe-inline'), the masthead toggle button, and theme.js."""
     for path in ("/", "/dashboard", "/docs", "/about"):
         html = client.get(path).text
         assert 'id="theme-toggle"' in html, f"toggle missing from {path}"
         assert "/assets/theme.js" in html, f"theme.js missing from {path}"
-        assert 'localStorage.getItem("llmqa-theme")' in html, f"no-flash snippet missing from {path}"
+        # The pre-paint no-flash script is loaded synchronously in <head>.
+        head = html.split("</head>")[0]
+        assert "/assets/theme-init.js" in head, f"theme-init.js missing from <head> of {path}"
+        # No inline <script> blocks remain (required for the strict CSP).
+        assert "<script>" not in html, f"unexpected inline <script> in {path}"
+    # The externalized snippet actually contains the no-flash logic.
+    init_js = client.get("/assets/theme-init.js").text
+    assert 'localStorage.getItem("llmqa-theme")' in init_js
 
 
 def test_theme_assets_served():

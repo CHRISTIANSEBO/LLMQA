@@ -24,6 +24,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -400,7 +401,9 @@ async def run(req: RunRequest, request: Request) -> dict:
         max_cost_usd=req.max_cost_usd,
     )
 
-    run_id = save_run(eval_run, DB_PATH) if req.store else None
+    # Offload the SQLite write to a worker thread so a slow disk can't block the
+    # event loop while other requests are in flight.
+    run_id = (await run_in_threadpool(save_run, eval_run, DB_PATH)) if req.store else None
     _record_metrics(eval_run)
 
     payload = eval_run.model_dump()
@@ -540,8 +543,35 @@ PAGES = {
     "/about": "about.html",
 }
 
+class CachedStaticFiles(StaticFiles):
+    """StaticFiles that adds a revalidating Cache-Control to every asset.
+
+    StaticFiles already emits ETag + Last-Modified, so the browser can send a
+    conditional request and get a cheap 304 instead of re-downloading. We add a
+    short max-age so repeat visits skip even the revalidation round-trip for a
+    while, without risking stale assets for long (no content hashing yet).
+    Tune with LLMQA_ASSET_MAX_AGE (seconds).
+    """
+
+    def __init__(self, *args, max_age: int = 3600, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self._max_age = max_age
+
+    async def get_response(self, path: str, scope):
+        response = await super().get_response(path, scope)
+        response.headers.setdefault(
+            "Cache-Control", f"public, max-age={self._max_age}, must-revalidate"
+        )
+        return response
+
+
 if STATIC_DIR.exists():
-    app.mount("/assets", StaticFiles(directory=STATIC_DIR / "assets"), name="assets")
+    _asset_max_age = int(os.environ.get("LLMQA_ASSET_MAX_AGE", "3600"))
+    app.mount(
+        "/assets",
+        CachedStaticFiles(directory=STATIC_DIR / "assets", max_age=_asset_max_age),
+        name="assets",
+    )
 
     def _page(name: str) -> FileResponse:
         return FileResponse(STATIC_DIR / name)
