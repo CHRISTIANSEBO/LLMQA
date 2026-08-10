@@ -185,6 +185,24 @@
     </div>
   </section>
 
+  <section class="panel" id="validatePanel">
+    <h2>Validate a dataset</h2>
+    <p class="hint">Paste or upload your own golden dataset (YAML or JSON) to check it against
+      the <a href="https://github.com/CHRISTIANSEBO/LLMQA/blob/main/datasets/dataset.schema.json" target="_blank" rel="noopener">schema</a>
+      before committing it — same validation the CLI runs. Nothing is uploaded or stored.</p>
+    <div class="control-row">
+      <label class="file-label">Upload a file
+        <input id="ds-file" type="file" accept=".yaml,.yml,.json,text/yaml,application/json" />
+      </label>
+      <button id="ds-validate" class="run" type="button">Validate</button>
+      <button id="ds-clear" class="ghost-btn" type="button">Clear</button>
+      <span id="ds-status" class="status" aria-live="polite"></span>
+    </div>
+    <textarea id="ds-text" class="ds-text" rows="10" spellcheck="false"
+      placeholder="- id: capital-france&#10;  input: What is the capital of France?&#10;  expected: Paris&#10;  gate_metrics: [exact_match]"></textarea>
+    <div id="ds-result" class="ds-result" hidden></div>
+  </section>
+
   <section class="panel">
     <h2>Quality trend</h2>
     <div id="trend" class="trend">No history yet — run an evaluation.</div>

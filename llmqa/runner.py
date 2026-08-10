@@ -33,16 +33,26 @@ def load_dataset(path: str | Path) -> list[TestCase]:
         ) from exc
     except OSError as exc:
         raise DatasetError(f"Could not read dataset {p}: {exc}") from exc
+    return parse_dataset_text(text, label=str(p))
 
+
+def parse_dataset_text(text: str, *, label: str = "dataset") -> list[TestCase]:
+    """Validate raw YAML/JSON dataset *text* into TestCase objects.
+
+    Shared by :func:`load_dataset` (files) and the web layer (pasted/uploaded
+    datasets), so on-disk and in-memory datasets are validated identically and
+    raise the same actionable :class:`DatasetError`. ``label`` is used only in
+    error messages.
+    """
     try:
         raw = yaml.safe_load(text)
     except yaml.YAMLError as exc:
-        raise DatasetError(f"Dataset {p} is not valid YAML/JSON: {exc}") from exc
+        raise DatasetError(f"{label} is not valid YAML/JSON: {exc}") from exc
 
     if not isinstance(raw, list):
         got = type(raw).__name__
         raise DatasetError(
-            f"Dataset {p} must be a list of cases, got {got}. "
+            f"{label} must be a list of cases, got {got}. "
             f"See datasets/dataset.schema.json."
         )
 
@@ -50,7 +60,7 @@ def load_dataset(path: str | Path) -> list[TestCase]:
     for i, item in enumerate(raw):
         if not isinstance(item, dict):
             raise DatasetError(
-                f"Dataset {p}: case #{i + 1} must be a mapping, got "
+                f"{label}: case #{i + 1} must be a mapping, got "
                 f"{type(item).__name__}."
             )
         try:
@@ -58,12 +68,12 @@ def load_dataset(path: str | Path) -> list[TestCase]:
         except ValidationError as exc:
             cid = item.get("id", f"#{i + 1}")
             raise DatasetError(
-                f"Dataset {p}: case {cid!r} is invalid: {exc.errors()[0]['msg']} "
+                f"{label}: case {cid!r} is invalid: {exc.errors()[0]['msg']} "
                 f"(field: {'.'.join(str(x) for x in exc.errors()[0]['loc']) or '?'}). "
                 f"See datasets/dataset.schema.json."
             ) from exc
     if not cases:
-        raise DatasetError(f"Dataset {p} is empty (no cases).")
+        raise DatasetError(f"{label} is empty (no cases).")
     return cases
 
 

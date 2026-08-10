@@ -55,6 +55,7 @@ async function init() {
   const sortSel = $("#resultSort");
   if (sortSel) sortSel.addEventListener("change", applyResultView);
   initCompare(cfg.all_providers);
+  initDatasetValidator();
   initDownloads();
   initDatasetPeek();
   initHistoryDiff();
@@ -968,6 +969,70 @@ function downloadFile(filename, text, mime) {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// =====================================================================
+// Dataset validator — paste/upload a dataset and check it against the schema
+// via /api/validate-dataset. Nothing is stored server-side.
+// =====================================================================
+function initDatasetValidator() {
+  const text = $("#ds-text");
+  const file = $("#ds-file");
+  const btn = $("#ds-validate");
+  const clear = $("#ds-clear");
+  const status = $("#ds-status");
+  const result = $("#ds-result");
+  if (!text || !btn) return;
+
+  if (file) file.addEventListener("change", async () => {
+    const f = file.files && file.files[0];
+    if (!f) return;
+    text.value = await f.text();
+    status.textContent = `Loaded ${f.name}`;
+  });
+
+  if (clear) clear.addEventListener("click", () => {
+    text.value = "";
+    if (file) file.value = "";
+    status.textContent = "";
+    result.hidden = true;
+    result.innerHTML = "";
+  });
+
+  btn.addEventListener("click", async () => {
+    const content = text.value.trim();
+    if (!content) { status.textContent = "Paste or upload a dataset first."; return; }
+    btn.disabled = true;
+    status.textContent = "Validating\u2026";
+    try {
+      const data = await api("/api/validate-dataset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content }),
+      });
+      status.textContent = "";
+      result.hidden = false;
+      result.className = "ds-result ok";
+      const rows = data.cases.map((c) => {
+        const tags = (c.tags || []).map((t) => `<span class="tag">${esc(t)}</span>`).join("");
+        const gates = (c.gate_metrics && c.gate_metrics.length)
+          ? c.gate_metrics.map((g) => `<code>${esc(g)}</code>`).join(" ")
+          : `<span class="peek-allgate">all metrics</span>`;
+        return `<div class="peek-item"><div class="peek-head"><span class="peek-id">${esc(c.id)}</span>${tags}</div>`
+          + `<div class="peek-in">${esc(c.input || "")}</div>`
+          + `<div class="peek-gate">gated on: ${gates}${c.has_context ? ' \u00b7 <span class="peek-allgate">has context</span>' : ""}</div></div>`;
+      }).join("");
+      result.innerHTML = `<p class="ds-ok-head">\u2713 Valid \u2014 ${data.count} case${data.count === 1 ? "" : "s"}.</p>`
+        + `<div class="peek-list">${rows}</div>`;
+    } catch (e) {
+      result.hidden = false;
+      result.className = "ds-result err";
+      result.innerHTML = `<p class="ds-err-head">\u2715 Invalid</p><pre class="dv">${esc(e.message)}</pre>`;
+      status.textContent = "";
+    } finally {
+      btn.disabled = false;
+    }
+  });
 }
 
 // =====================================================================

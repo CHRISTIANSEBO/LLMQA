@@ -321,6 +321,20 @@ main { max-width: 1040px; margin: 0 auto; padding: 30px 22px 60px; }
 .result-tools .sortField { display: inline-flex; gap: 6px; align-items: center; font-family: var(--mono); }
 .result-tools select { font-family: var(--mono); font-size: 12px; }
 .run-link { cursor: pointer; }
+
+/* Dataset validator */
+.ds-text { width: 100%; box-sizing: border-box; margin: 12px 0; padding: 12px;
+  background: var(--field-bg); border: 1px solid var(--rule-strong); color: var(--ink);
+  border-radius: 3px; font-family: var(--mono); font-size: 13px; line-height: 1.5;
+  resize: vertical; }
+.ds-text:focus { outline: 2px solid var(--ink); outline-offset: 1px; }
+.file-label input[type=file] { font-family: var(--mono); font-size: 12px; color: var(--muted);
+  background: none; border: none; padding: 4px 0; min-width: 0; }
+.ds-result { margin-top: 12px; border: 1px solid var(--rule); border-radius: 3px; padding: 12px 16px; }
+.ds-result.ok { border-color: var(--pass); }
+.ds-result.err { border-color: var(--fail); }
+.ds-ok-head { color: var(--pass); font-family: var(--mono); font-size: 13px; margin: 0 0 10px; }
+.ds-err-head { color: var(--fail); font-family: var(--mono); font-size: 13px; margin: 0 0 8px; }
 .empty-lead { margin: 0 auto 10px; max-width: 440px; font-size: 14.5px; color: var(--ink-2); line-height: 1.55; }
 .empty-lead strong { color: var(--ink); }
 .empty-note { margin: 0; font-size: 12.5px; color: var(--muted); font-style: italic; }
