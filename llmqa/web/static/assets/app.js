@@ -50,6 +50,11 @@ async function init() {
     metricsBox.appendChild(label);
   });
 
+  // Restore the last-used run config, then persist it on every change so a
+  // reload doesn't reset your setup.
+  restoreFormState();
+  wireFormPersistence();
+
   $("#runBtn").addEventListener("click", runEval);
   const cancelBtn = $("#cancelBtn");
   if (cancelBtn) cancelBtn.addEventListener("click", cancelRun);
@@ -70,6 +75,7 @@ async function init() {
   }
   const historySearch = $("#historySearch");
   if (historySearch) historySearch.addEventListener("input", applyHistoryFilter);
+  initShortcuts();
   initCompare(cfg.all_providers);
   initDatasetValidator();
   initDownloads();
@@ -219,8 +225,10 @@ async function runEval() {
 
   const total = expectedCaseCount(tagList);
   const streamedResults = [];
-  let caseCount = 0, passCount = 0, failCount = 0;
+  let caseCount = 0, passCount = 0, failCount = 0, costSoFar = 0;
   updateProgress(0, total, 0, 0);
+  const costMeterEl = $("#rp-cost");
+  if (costMeterEl) costMeterEl.textContent = "$0.0000";
 
   try {
     await streamRun(
@@ -228,10 +236,13 @@ async function runEval() {
       (result) => {
         caseCount++;
         if (result.passed) passCount++; else failCount++;
+        costSoFar += result.cost_usd || 0;
         status.textContent = `Evaluating case ${caseCount}…`;
         streamedResults.push(result);
         appendCaseRow(result);
         updateProgress(caseCount, total, passCount, failCount);
+        // Live cost meter (matters on real providers; $0 on the mock).
+        if (costMeterEl) costMeterEl.textContent = "$" + costSoFar.toFixed(4);
       },
       async (event) => {
         $("#summary").hidden = false;
@@ -362,6 +373,88 @@ function renderLoadedBanner(run) {
   if (!run || run.id == null) { el.hidden = true; return; }
   el.hidden = false;
   el.innerHTML = `Showing <strong>run #${run.id}</strong> · ${esc(run.provider || "")}/${esc(run.model || "")}`;
+}
+
+// ---- Form state persistence ----------------------------------------------
+const FORM_STATE_KEY = "llmqa-run-form";
+
+function saveFormState() {
+  try {
+    const state = {
+      provider: $("#provider")?.value,
+      dataset: $("#dataset")?.value,
+      tags: $("#tags")?.value,
+      concurrency: $("#concurrency")?.value,
+      maxCost: $("#maxCost")?.value,
+      store: $("#store")?.checked,
+      metrics: selectedMetrics(),
+    };
+    localStorage.setItem(FORM_STATE_KEY, JSON.stringify(state));
+  } catch (e) { /* private mode: no-op */ }
+}
+
+function restoreFormState() {
+  let s;
+  try { s = JSON.parse(localStorage.getItem(FORM_STATE_KEY) || "null"); } catch { return; }
+  if (!s) return;
+  const set = (sel, v) => { const el = $(sel); if (el != null && v != null) el.value = v; };
+  // Only restore a provider/dataset that still exists as an enabled option.
+  const prov = $("#provider");
+  if (prov && s.provider && [...prov.options].some((o) => o.value === s.provider && !o.disabled)) {
+    prov.value = s.provider;
+  }
+  const ds = $("#dataset");
+  if (ds && s.dataset && [...ds.options].some((o) => o.value === s.dataset)) {
+    ds.value = s.dataset;
+    CURRENT_DATASET = s.dataset;
+  }
+  set("#tags", s.tags);
+  set("#concurrency", s.concurrency);
+  set("#maxCost", s.maxCost);
+  if ($("#store") && typeof s.store === "boolean") $("#store").checked = s.store;
+  if (Array.isArray(s.metrics)) {
+    document.querySelectorAll("#metrics input").forEach((i) => {
+      i.checked = s.metrics.includes(i.value);
+    });
+  }
+}
+
+function wireFormPersistence() {
+  ["#provider", "#dataset", "#tags", "#concurrency", "#maxCost", "#store"].forEach((sel) => {
+    const el = $(sel);
+    if (el) el.addEventListener("change", saveFormState);
+  });
+  document.querySelectorAll("#metrics input").forEach((i) => i.addEventListener("change", saveFormState));
+}
+
+// ---- Keyboard shortcuts ---------------------------------------------------
+function initShortcuts() {
+  document.addEventListener("keydown", (e) => {
+    // Ignore when a modal/tour is open or when typing in a text field (except
+    // the documented combos).
+    const tag = (e.target.tagName || "").toLowerCase();
+    const typing = tag === "input" || tag === "textarea" || tag === "select";
+    // Cmd/Ctrl+Enter: run an evaluation from anywhere.
+    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+      e.preventDefault();
+      const btn = $("#runBtn");
+      if (btn && !btn.disabled) { switchTab("results"); runEval(); }
+      return;
+    }
+    if (typing || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.key === "/") {
+      // Focus the results search (switch to Results if needed).
+      e.preventDefault();
+      switchTab("results");
+      $("#resultSearch")?.focus();
+    } else if (e.key === "f") {
+      const cb = $("#failedOnly");
+      if (cb) { switchTab("results"); cb.checked = !cb.checked; applyResultView(); }
+    } else if (e.key === "r") {
+      const btn = $("#runBtn");
+      if (btn && !btn.disabled) { switchTab("results"); runEval(); }
+    }
+  });
 }
 
 // ---- Tabs: Run / Results / History & trend / Compare / Validate ----------
@@ -677,7 +770,8 @@ async function loadHistory() {
     tr.draggable = true;
     tr.dataset.runId = r.id;
     tr.title = "Drag into a slot above — or click to add to the diff";
-    const ds = (r.dataset || "").replace(/\.ya?ml$/i, "") || "—";
+    // Show just the dataset name (the stored value is a full path).
+    const ds = ((r.dataset || "").split(/[/\\]/).pop() || "").replace(/\.ya?ml$/i, "") || "—";
     const label = r.label ? esc(r.label) : "—";
     // Searchable haystack for the history filter.
     tr.dataset.hay = `${r.provider} ${r.model} ${ds} ${r.label || ""}`.toLowerCase();
@@ -688,7 +782,8 @@ async function loadHistory() {
       <td>${label}</td>
       <td>${Math.round(r.pass_rate * 100)}%</td>
       <td>${r.avg_score.toFixed(2)}</td>
-      <td>$${(r.cost_usd || 0).toFixed(4)}</td>`;
+      <td>$${(r.cost_usd || 0).toFixed(4)}</td>
+      <td><button class="mini-btn diff-add" type="button" data-run-id="${r.id}" title="Add this run to the A/B diff">⇄ diff</button></td>`;
     tr.addEventListener("dragstart", (e) => {
       e.dataTransfer.setData("text/plain", String(r.id));
       e.dataTransfer.effectAllowed = "copy";
@@ -696,9 +791,10 @@ async function loadHistory() {
     });
     tr.addEventListener("dragend", () => tr.classList.remove("dragging"));
     tr.addEventListener("click", (e) => {
-      // Clicking the #id link opens the run; clicking elsewhere in the row
-      // adds it to the diff slots (existing behavior).
+      // The #id link opens the run; the '⇄ diff' button adds it to the A/B
+      // slots; clicking elsewhere in the row also adds to the diff.
       const link = e.target.closest(".run-link");
+      const diffBtn = e.target.closest(".diff-add");
       if (link) {
         e.stopPropagation();
         const id = link.dataset.runId;
@@ -707,6 +803,10 @@ async function loadHistory() {
         history.replaceState(null, "", url);
         loadRunById(id);
         window.scrollTo({ top: 0, behavior: "smooth" });
+      } else if (diffBtn) {
+        e.stopPropagation();
+        assignRunToNextSlot(r.id);
+        document.getElementById("slotA")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
       } else {
         assignRunToNextSlot(r.id);
       }
