@@ -90,12 +90,14 @@
     <button id="runBtn" class="run">Run evaluation</button>
     <button id="cancelBtn" class="ghost-btn" type="button" hidden>■ Cancel</button>
     <span id="status" class="status" aria-live="polite"></span>
+    <p class="kbd-hint">Shortcuts: <kbd>⌘/Ctrl</kbd>+<kbd>Enter</kbd> or <kbd>r</kbd> run · <kbd>/</kbd> search · <kbd>f</kbd> failed-only</p>
     <div id="runProgress" class="run-progress" hidden aria-hidden="true">
       <div class="rp-bar"><span id="rp-fill" class="rp-fill"></span></div>
       <div class="rp-tally">
         <span id="rp-count" class="rp-count">0 / 0</span>
         <span class="rp-pass" id="rp-pass">✓ 0</span>
         <span class="rp-fail" id="rp-fail">✕ 0</span>
+        <span class="rp-cost" id="rp-cost" title="accumulated cost so far">$0.0000</span>
       </div>
     </div>
   </section>
@@ -243,7 +245,7 @@
     </div>
     <div class="table-wrap">
       <table id="history">
-        <thead><tr><th>#</th><th>When</th><th>Provider / model</th><th>Dataset</th><th>Label</th><th>Pass</th><th>Avg</th><th>Cost</th></tr></thead>
+        <thead><tr><th>#</th><th>When</th><th>Provider / model</th><th>Dataset</th><th>Label</th><th>Pass</th><th>Avg</th><th>Cost</th><th></th></tr></thead>
         <tbody></tbody>
       </table>
     </div>

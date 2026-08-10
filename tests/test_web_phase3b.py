@@ -52,6 +52,17 @@ def test_dashboard_is_tabbed():
     assert ">Dataset<" in html and ">Label<" in html
 
 
+def test_dashboard_qol_affordances():
+    """Quality-of-life bits render in the served dashboard: keyboard-shortcut
+    hint, a live cost meter in the run progress, and a per-row diff button +
+    a diff-column header in history."""
+    html = client.get("/dashboard").text
+    assert 'class="kbd-hint"' in html
+    assert 'id="rp-cost"' in html
+    # history table has the extra (unlabeled) action column for the diff button
+    assert ">Cost</th><th></th>" in html
+
+
 def test_home_hero_demo_wired():
     """The home page ships the live hero demo container + its external script,
     and hero.js is served (external so it complies with the strict CSP)."""

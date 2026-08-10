@@ -447,6 +447,15 @@ main { max-width: 1040px; margin: 0 auto; padding: 30px 22px 60px; }
 .loaded-banner { font-family: var(--mono); font-size: 12.5px; color: var(--ink-2);
   background: var(--field-bg); border: 1px solid var(--rule); border-left: 3px solid var(--ink);
   border-radius: 3px; padding: 8px 12px; margin: 0 0 16px; }
+
+/* Live cost meter in the run progress tally. */
+.rp-cost { font-family: var(--mono); font-size: 12px; color: var(--muted); margin-left: auto; }
+.diff-add { white-space: nowrap; }
+
+/* Keyboard-shortcut hint under the run button. */
+.kbd-hint { margin: 10px 0 0; font-size: 11.5px; color: var(--muted); }
+.kbd-hint kbd { font-family: var(--mono); font-size: 10.5px; background: var(--field-bg);
+  border: 1px solid var(--rule); border-radius: 3px; padding: 1px 5px; color: var(--ink-2); }
 .empty-lead { margin: 0 auto 10px; max-width: 440px; font-size: 14.5px; color: var(--ink-2); line-height: 1.55; }
 .empty-lead strong { color: var(--ink); }
 .empty-note { margin: 0; font-size: 12.5px; color: var(--muted); font-style: italic; }
