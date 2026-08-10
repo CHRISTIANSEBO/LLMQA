@@ -578,6 +578,22 @@ function renderTrend(runs) {
   const inkColor2 = css.getPropertyValue("--ink-2").trim() || "#333333";
   const gridColor = css.getPropertyValue("--rule").trim() || "#dddad2";
   const mutedColor = css.getPropertyValue("--muted").trim() || "#6b6b6b";
+  const failColor = css.getPropertyValue("--fail").trim() || "#c1121f";
+  // Subtle area fill under the pass-rate line for presence.
+  const areaPath = `M${x(0).toFixed(1)},${y(0).toFixed(1)} `
+    + series.map((r, i) => `L${x(i).toFixed(1)},${y(r.pass_rate).toFixed(1)}`).join(" ")
+    + ` L${x(n - 1).toFixed(1)},${y(0).toFixed(1)} Z`;
+  // Flag the largest run-over-run pass-rate DROP as a caught regression.
+  let worstIdx = -1, worstDrop = 0;
+  for (let i = 1; i < n; i++) {
+    const drop = series[i - 1].pass_rate - series[i].pass_rate;
+    if (drop > worstDrop) { worstDrop = drop; worstIdx = i; }
+  }
+  const regressionMark = (worstIdx >= 0 && worstDrop >= 0.1)
+    ? `<circle cx="${x(worstIdx).toFixed(1)}" cy="${y(series[worstIdx].pass_rate).toFixed(1)}" r="4.5" fill="${failColor}"/>`
+      + `<line x1="${x(worstIdx).toFixed(1)}" y1="${(y(series[worstIdx].pass_rate) + 6).toFixed(1)}" x2="${x(worstIdx).toFixed(1)}" y2="${H - 6}" stroke="${failColor}" stroke-width="1" stroke-dasharray="2 2"/>`
+      + `<text x="${x(worstIdx).toFixed(1)}" y="${H - 1}" fill="${failColor}" font-size="9" text-anchor="middle">regression caught</text>`
+    : "";
   const gridY = [0, 0.5, 1].map((v) =>
     `<line x1="${padX}" y1="${y(v).toFixed(1)}" x2="${W - padX}" y2="${y(v).toFixed(1)}" stroke="${gridColor}" stroke-width="1"/>` +
     `<text x="2" y="${(y(v) + 3).toFixed(1)}" fill="${mutedColor}" font-size="9">${v}</text>`).join("");
@@ -598,9 +614,11 @@ function renderTrend(runs) {
   el.innerHTML = `
     <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="quality trend">
       ${gridY}${marks}
+      <path d="${areaPath}" fill="${inkColor}" opacity="0.05"/>
       <path d="${path("avg_score")}" fill="none" stroke="${inkColor2}" stroke-width="2" stroke-dasharray="5 4"/>
       <path d="${path("pass_rate")}" fill="none" stroke="${inkColor}" stroke-width="2.5"/>
       ${dots("avg_score", inkColor2)}${dots("pass_rate", inkColor)}
+      ${regressionMark}
     </svg>
     <div class="chart-cap">
       ―― pass rate (solid) &nbsp;&nbsp; –– avg score (dashed) &nbsp; (oldest → newest, ${n} runs)

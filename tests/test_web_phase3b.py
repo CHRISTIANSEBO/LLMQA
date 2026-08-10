@@ -36,3 +36,15 @@ def test_asset_cache_control_present():
     assert r.status_code == 200
     cc = r.headers.get("Cache-Control", "")
     assert "max-age=" in cc and "must-revalidate" in cc
+
+
+def test_home_hero_demo_wired():
+    """The home page ships the live hero demo container + its external script,
+    and hero.js is served (external so it complies with the strict CSP)."""
+    html = client.get("/").text
+    assert 'id="heroDemo"' in html
+    assert 'id="hd-rows"' in html
+    assert "/assets/hero.js" in html
+    js = client.get("/assets/hero.js")
+    assert js.status_code == 200
+    assert "regression caught" in js.text
