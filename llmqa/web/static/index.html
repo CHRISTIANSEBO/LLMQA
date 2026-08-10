@@ -5,18 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>LLMQA — LLM Quality Assurance</title>
 <meta name="description" content="LLMQA is an open-source harness for making LLM quality measurable, reviewable, and gate-able in CI — free, key-optional, and provider-agnostic." />
-<script>
-  /* Set the theme before paint to avoid a flash of the wrong palette.
-     Only an explicit stored choice is applied here; otherwise CSS follows the
-     OS via prefers-color-scheme. */
-  (function () {
-    try {
-      var t = localStorage.getItem("llmqa-theme");
-      if (t === "light" || t === "dark")
-        document.documentElement.setAttribute("data-theme", t);
-    } catch (e) {}
-  })();
-</script>
+<script src="/assets/theme-init.js"></script>
 <link rel="stylesheet" href="/assets/app.css" />
 <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg" />
 <link rel="manifest" href="/manifest.webmanifest" />
@@ -138,23 +127,6 @@
 <footer>LLMQA v0.1 · open-source LLM evaluation harness · MIT licensed · maintained by <a href="https://github.com/CHRISTIANSEBO" target="_blank" rel="noopener">@CHRISTIANSEBO</a></footer>
 <script src="/assets/theme.js"></script>
 <script src="/assets/pwa.js" defer></script>
-<script>
-  /* Warm the cache for the dashboard's critical resources so it opens fast
-     from the home page. Fire-and-forget on idle; failures are harmless. */
-  (function () {
-    var warm = function () {
-      try {
-        fetch("/api/config", { headers: { "X-Prefetch": "1" } }).catch(function () {});
-        ["/assets/app.js", "/dashboard"].forEach(function (href) {
-          var l = document.createElement("link");
-          l.rel = "prefetch"; l.href = href;
-          document.head.appendChild(l);
-        });
-      } catch (e) {}
-    };
-    if ("requestIdleCallback" in window) requestIdleCallback(warm, { timeout: 2000 });
-    else setTimeout(warm, 1200);
-  })();
-</script>
+<script src="/assets/prefetch.js" defer></script>
 </body>
 </html>

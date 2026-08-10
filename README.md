@@ -311,7 +311,21 @@ burn your API budget. All are env-configurable:
 | `ALLOWED_ORIGINS` | none | CORS is closed by default (frontend is same-origin); set a comma list only for a split deploy. |
 
 Request-supplied dataset names are resolved only against the packaged
-`datasets/` directory (no path traversal / arbitrary file reads).
+`datasets/` directory (no path traversal / arbitrary file reads). Uploaded/pasted
+datasets (via the dashboard's validator or `POST /api/validate-dataset`) are
+validated in memory and never written to disk.
+
+Additional response headers and limits are applied automatically: a baseline
+**Content-Security-Policy** and security headers (override the CSP with
+`LLMQA_CSP`), a request **body-size cap** (`LLMQA_MAX_BODY_BYTES`, default 256
+KiB), and a per-request `X-Request-ID` for log correlation. A `GET /metrics`
+endpoint exposes Prometheus counters, and `GET /api/health?deep=1` runs a cheap
+liveness probe.
+
+> **Note:** the per-IP rate limiter is **in-process** (per worker). Behind
+> multiple workers or replicas each process keeps its own window, so the
+> effective limit scales with the worker count. For a hard global limit, run a
+> single worker or enforce the limit at your proxy/load balancer.
 
 ## Contributing
 
