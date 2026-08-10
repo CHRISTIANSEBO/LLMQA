@@ -54,30 +54,15 @@ by metric : exact_match=1.00, similarity=1.00, llm_judge=1.00, hallucination=1.0
 cost      : $0.0000
 ```
 
-## Web Dashboard & PWA
+## Web dashboard
 
-LLMQA ships with a FastAPI + vanilla-JS dashboard that can be installed as a **Progressive Web App** (PWA). It features a clean dark theme, live evaluation streaming, metric breakdowns, provider comparison, quality trend tracking, and full offline support for reviewing cached run history.
+LLMQA ships with a FastAPI and vanilla-JS dashboard: pick a dataset, trigger runs that stream in case by case, see per-case pass/fail with metric breakdowns, compare two providers, and track a quality trend across runs. It is a single service (the API serves the frontend), so it deploys anywhere in one process.
 
-### PWA Features
-- Installable as a standalone desktop/mobile app
-- Works offline (cached config + evaluation history)
-- Smart update notifications with one-click reload
-- Beautiful install prompts with platform-specific guidance
-
-![LLMQA Dashboard](media/llmqa-demo-1.jpg)
-![Evaluation Results](media/llmqa-demo-2.jpg)
-![PWA Experience](media/llmqa-demo-3.jpg)
+![LLMQA dashboard demo](docs/demo.gif)
 
 ```bash
 pip install "llmqa[web]"
 python -m llmqa.web         # http://localhost:8000  (or `python server.py` from source)
-# Self-hosted only: set any of these to enable a real provider in the UI:
-export ANTHROPIC_API_KEY=...
-export OPENAI_API_KEY=...
-export XAI_API_KEY=...
-# Optional: persist the response cache across restarts
-export LLMQA_CACHE=.llmqa_cache.db
-```
 # Self-hosted only: set any of these to enable a real provider in the UI:
 export ANTHROPIC_API_KEY=...
 export OPENAI_API_KEY=...
