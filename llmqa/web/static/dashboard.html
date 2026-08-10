@@ -94,8 +94,15 @@
   <section class="cards" id="summary" hidden>
     <div class="card"><span class="k">Pass rate</span><span class="v" id="s-pass">—</span></div>
     <div class="card"><span class="k">Avg score</span><span class="v" id="s-score">—</span></div>
-    <div class="card"><span class="k">Model</span><span class="v small" id="s-model">—</span></div>
+    <div class="card"><span class="k">Latency p50 / p95</span><span class="v small" id="s-latency">—</span></div>
     <div class="card"><span class="k">Cost</span><span class="v" id="s-cost">—</span></div>
+    <div class="card"><span class="k">Model</span><span class="v small" id="s-model">—</span></div>
+  </section>
+
+  <section class="panel metric-breakdown" id="metricBreakdown" hidden>
+    <h2>Metric breakdown</h2>
+    <p class="hint">Pass rate per metric across this run — shows which metric is dragging quality down.</p>
+    <div id="mb-bars" class="mb-bars"></div>
   </section>
 
   <section class="panel empty-state" id="resultsEmpty">
@@ -124,7 +131,13 @@
     <p id="verdict" class="verdict" hidden></p>
     <p class="hint">Bold metric = gates this case's pass/fail. Others are informational — a case can PASS with a low non-gating score (e.g. a summary shouldn't fail on exact string match).</p>
     <div class="result-tools">
+      <input id="resultSearch" type="search" class="result-search" placeholder="Search case id or input…" aria-label="Search cases" />
       <label class="checkbox"><input id="failedOnly" type="checkbox" /> Failed only</label>
+      <label class="sortField">Metric
+        <select id="metricFilter">
+          <option value="">all metrics</option>
+        </select>
+      </label>
       <label class="sortField">Sort
         <select id="resultSort">
           <option value="default">dataset order</option>
@@ -134,6 +147,7 @@
           <option value="latency-desc">slowest first</option>
         </select>
       </label>
+      <span id="resultCount" class="result-count"></span>
     </div>
     <div id="tagFilter" class="tag-filter-bar" aria-label="Filter by tag"></div>
     <div class="legend" aria-label="score legend">
