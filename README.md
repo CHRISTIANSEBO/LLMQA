@@ -13,6 +13,30 @@ It runs from the **CLI**, a **web dashboard**, or a **reusable GitHub Action**, 
 
 > The hosted dashboard at the badge above is a **mock-only** showcase (no API keys, so it stays free and safe to share). Real-provider evaluation is intended to run **self-hosted**, where you supply your own keys.
 
+## Table of Contents
+
+- [Why](#why)
+- [Quickstart](#quickstart)
+- [Web dashboard](#web-dashboard)
+- [Gate a pull request (GitHub Action)](#gate-a-pull-request-github-action)
+- [Datasets](#datasets)
+- [Provider tiers and real models](#provider-tiers-and-real-models)
+- [Production runner](#production-runner)
+- [Usage](#usage)
+  - [Errors & exit codes](#errors-exit-codes)
+  - [Determinism & reliability](#determinism-reliability)
+  - [Flexible expected answers](#flexible-expected-answers)
+  - [Response cache (cost saver)](#response-cache-cost-saver)
+  - [Examples](#examples)
+- [Metrics](#metrics)
+- [Per-case metric gating](#per-case-metric-gating)
+- [Architecture](#architecture)
+- [The CI-gate story](#the-ci-gate-story)
+- [Deploy](#deploy)
+  - [Hardening the public API](#hardening-the-public-api)
+- [Contributing](#contributing)
+- [License](#license)
+
 ## Why
 
 Prompt and model changes are hard to review. "Looks better" is not a diff you can gate a deploy on. LLMQA turns quality into something measurable and enforceable:
@@ -223,7 +247,7 @@ Real golden sets rarely have one exact string answer. Each case can declare:
 
 Providers keep an **in-memory response cache** keyed on
 `(provider, model, prompt, context)`. Identical calls within a process are
-served from the cache instead of re-hitting a paid API a cached hit is billed
+served from the cache instead of re-hitting a paid API. A cached hit is billed
 at `$0` and marked `cached`. This matters most for the live `anthropic` provider
 and the web dashboard, where the same golden case (or a repeated judge prompt)
 would otherwise be paid for again on every run. The dashboard reuses one
@@ -342,3 +366,5 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the full dev setup and how to add a m
 ## License
 
 MIT (c) 2026 Christian Sebo
+
+See [CHANGELOG.md](CHANGELOG.md) for recent changes.
