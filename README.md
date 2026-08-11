@@ -13,6 +13,15 @@ It runs from the **CLI**, a **web dashboard**, or a **reusable GitHub Action**, 
 
 > The hosted dashboard at the badge above is a **mock-only** showcase (no API keys, so it stays free and safe to share). Real-provider evaluation is intended to run **self-hosted**, where you supply your own keys.
 
+**Key features**
+
+- Golden datasets with per-case metric gating
+- Quality + regression gates for CI
+- Deterministic key-free mocks + real Anthropic / OpenAI / xAI providers
+- Web dashboard with live streaming and trend tracking
+- Reusable GitHub Action for PR gating
+- Persistent response cache (dramatically reduces cost on repeated runs)
+
 ## Table of Contents
 
 - [Why](#why)
@@ -65,6 +74,25 @@ git clone https://github.com/CHRISTIANSEBO/LLMQA && cd LLMQA
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[all]"
 llmqa run --provider mock       # or `python cli.py run --provider mock`
+```
+
+### Most common commands
+
+```bash
+# Basic evaluation (mock provider is free & deterministic)
+llmqa run --provider mock
+
+# CI quality gate
+llmqa run --provider mock --min-pass-rate 0.85
+
+# Regression check against last run
+llmqa run --provider mock --regression
+
+# Run only RAG/grounding cases
+llmqa run --provider mock --tags rag grounding
+
+# Real model (requires API key)
+llmqa run --provider anthropic --dataset factual_qa.yaml
 ```
 
 ```
@@ -166,6 +194,9 @@ Built for real evaluations against paid providers:
 
 ## Usage
 
+<details>
+<summary><strong>Full CLI flag reference</strong> (click to expand)</summary>
+
 ```bash
 python cli.py run [options]
 
@@ -206,6 +237,8 @@ python cli.py run [options]
   --no-cache                 Disable the response cache
   --cache-path FILE          Persist the response cache to this SQLite file
 ```
+
+</details>
 
 ### Errors & exit codes
 
