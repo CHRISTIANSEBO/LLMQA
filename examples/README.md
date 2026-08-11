@@ -4,7 +4,7 @@ Runnable, self-contained examples. All of them use the free, deterministic
 `mock` provider, so they need **no API key**.
 
 ```bash
-pip install llmqa            # or: pip install -e ".[all]" from a source checkout
+pip install -e ".[all]"      # from a source checkout
 ```
 
 | File | Shows |
