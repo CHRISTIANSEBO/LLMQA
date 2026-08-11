@@ -107,6 +107,41 @@ def latest_run(db_path: str | Path = DEFAULT_DB, label: str | None = None) -> di
     }
 
 
+def latest_run_case_scores(
+    db_path: str | Path = DEFAULT_DB, label: str | None = None
+) -> dict[str, float] | None:
+    """Per-case scores of the most recent (optionally labelled) stored run.
+
+    Returns ``{case_id: mean_metric_score}`` reconstructed from the stored
+    per-case results, or ``None`` when there is no matching run or it predates
+    per-case persistence. Used for paired regression-significance testing.
+    """
+    if not Path(db_path).exists():
+        return None
+    conn = _connect(db_path)
+    try:
+        if label is not None:
+            row = conn.execute(
+                "SELECT results_json FROM runs WHERE label = ? ORDER BY id DESC LIMIT 1",
+                (label,),
+            ).fetchone()
+        else:
+            row = conn.execute(
+                "SELECT results_json FROM runs ORDER BY id DESC LIMIT 1"
+            ).fetchone()
+    finally:
+        conn.close()
+    if not row or not row[0]:
+        return None
+    detail = json.loads(row[0])
+    scores: dict[str, float] = {}
+    for r in detail.get("results", []):
+        metrics = r.get("metrics") or []
+        if metrics:
+            scores[r["case_id"]] = sum(m["score"] for m in metrics) / len(metrics)
+    return scores or None
+
+
 def list_runs(db_path: str | Path = DEFAULT_DB, limit: int = 50) -> list[dict]:
     """Return recent runs (newest first) as summary dicts for the dashboard."""
     if not Path(db_path).exists():

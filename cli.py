@@ -27,7 +27,8 @@ from llmqa.metrics import build_metric
 from llmqa.providers import get_provider
 from llmqa.report import to_console, to_junit, to_markdown
 from llmqa.runner import run_eval
-from llmqa.store import latest_run, save_run
+from llmqa.stats import paired_regression_verdict
+from llmqa.store import latest_run, latest_run_case_scores, save_run
 
 log = logging.getLogger("llmqa")
 
@@ -91,11 +92,11 @@ def cmd_run(args: argparse.Namespace) -> int:
         else:
             metrics.append(build_metric(name))
 
-    baseline = (
-        latest_run(args.db, label=args.regression_baseline)
-        if args.regression
-        else None
-    )
+    baseline = None
+    baseline_scores = None
+    if args.regression:
+        baseline = latest_run(args.db, label=args.regression_baseline)
+        baseline_scores = latest_run_case_scores(args.db, label=args.regression_baseline)
 
     dataset_path = resolve_cli_dataset(args.dataset)
     run = run_eval(
@@ -128,10 +129,10 @@ def cmd_run(args: argparse.Namespace) -> int:
         tag = f" [label={args.label}]" if args.label else ""
         print(f"Saved run #{run_id} to {args.db}{tag}")
 
-    return _evaluate_gates(run, args, baseline)
+    return _evaluate_gates(run, args, baseline, baseline_scores)
 
 
-def _evaluate_gates(run, args, baseline) -> int:
+def _evaluate_gates(run, args, baseline, baseline_scores=None) -> int:
     """Apply every configured gate; return 0 if all pass, 1 if any fail."""
     failures: list[str] = []
     oks: list[str] = []
@@ -179,19 +180,50 @@ def _evaluate_gates(run, args, baseline) -> int:
     if args.max_cost_budget is not None and run.total_cost_usd > args.max_cost_budget:
         failures.append(f"cost ${run.total_cost_usd:.4f} > budget ${args.max_cost_budget:.4f}")
 
-    # 6) Regression gate vs baseline.
+    # 6) Regression gate vs baseline. When per-case baseline scores are
+    #    available we test for *statistical significance* (paired bootstrap CI)
+    #    so the gate fires only on a real drop, not noise. Older summary-only
+    #    baselines fall back to the simple point-estimate threshold.
     if baseline:
-        drop = baseline["avg_score"] - run.avg_score
-        if drop > args.regression_tolerance:
-            failures.append(
-                f"regression: avg score dropped {drop:.2f} "
-                f"({baseline['avg_score']:.2f} -> {run.avg_score:.2f}), "
-                f"tolerance {args.regression_tolerance:.2f}"
+        confidence = getattr(args, "regression_confidence", 0.95)
+        common = (
+            sorted(set(baseline_scores) & set(run.case_scores()))
+            if baseline_scores
+            else []
+        )
+        if common:
+            current_scores = run.case_scores()
+            verdict = paired_regression_verdict(
+                [baseline_scores[c] for c in common],
+                [current_scores[c] for c in common],
+                tolerance=args.regression_tolerance,
+                confidence=confidence,
             )
+            if verdict.is_regression:
+                failures.append(
+                    f"regression (significant): {verdict.summary()}; drop "
+                    f"{verdict.observed_drop:.3f} > tolerance {args.regression_tolerance:.2f} "
+                    f"and {int(confidence * 100)}% CI is entirely below zero"
+                )
+            elif verdict.observed_drop > args.regression_tolerance:
+                oks.append(
+                    f"avg score dropped {verdict.observed_drop:.3f} but not statistically "
+                    f"significant ({int(confidence * 100)}% CI includes 0) — {verdict.summary()}"
+                )
+            else:
+                oks.append(f"no regression vs baseline — {verdict.summary()}")
         else:
-            oks.append(
-                f"no regression vs baseline ({baseline['avg_score']:.2f} -> {run.avg_score:.2f})"
-            )
+            drop = baseline["avg_score"] - run.avg_score
+            if drop > args.regression_tolerance:
+                failures.append(
+                    f"regression: avg score dropped {drop:.2f} "
+                    f"({baseline['avg_score']:.2f} -> {run.avg_score:.2f}), "
+                    f"tolerance {args.regression_tolerance:.2f}"
+                )
+            else:
+                oks.append(
+                    f"no regression vs baseline ({baseline['avg_score']:.2f} -> {run.avg_score:.2f})"
+                )
 
     # Surface any provider errors that were captured per case.
     errored = [r.case_id for r in run.results if getattr(r, "error", None)]
@@ -253,7 +285,11 @@ def build_parser() -> argparse.ArgumentParser:
     r.add_argument("--regression", action="store_true", help="Compare to a stored baseline run")
     r.add_argument("--regression-baseline", default=None, metavar="LABEL",
                    help="Compare to the latest run with this label (default: latest run overall)")
-    r.add_argument("--regression-tolerance", type=float, default=0.05)
+    r.add_argument("--regression-tolerance", type=float, default=0.05,
+                   help="Minimum avg-score drop (effect size) that counts as a regression")
+    r.add_argument("--regression-confidence", type=float, default=0.95,
+                   help="Confidence level for the paired bootstrap CI used to decide if a "
+                        "regression is statistically significant (default 0.95)")
     r.add_argument("--label", default=None, help="Tag this stored run with a label (e.g. baseline)")
 
     # Storage / output.

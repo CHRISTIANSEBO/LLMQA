@@ -109,6 +109,22 @@ class EvalRun(BaseModel):
         scores = [m.score for r in self.results for m in r.metrics]
         return sum(scores) / len(scores) if scores else 0.0
 
+    def metric_observations(self) -> list[float]:
+        """Every individual metric score in the run (flat), for CI estimation."""
+        return [m.score for r in self.results for m in r.metrics]
+
+    def case_scores(self) -> dict[str, float]:
+        """Per-case score = mean of that case's metric scores, keyed by case id.
+
+        This is the case-level unit used for paired regression significance
+        testing against a baseline run.
+        """
+        out: dict[str, float] = {}
+        for r in self.results:
+            if r.metrics:
+                out[r.case_id] = sum(m.score for m in r.metrics) / len(r.metrics)
+        return out
+
     def score_by_metric(self) -> dict[str, float]:
         """Average score grouped by metric name."""
         buckets: dict[str, list[float]] = {}

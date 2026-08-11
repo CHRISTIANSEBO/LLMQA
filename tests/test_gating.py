@@ -86,3 +86,48 @@ def test_cli_gate_passes_when_thresholds_met():
     )
     code = _evaluate_gates(_run(), args, baseline=None)
     assert code == 0
+
+
+def _regression_args():
+    import argparse
+
+    return argparse.Namespace(
+        min_pass_rate=None, min_tag_pass_rate=None, min_metric_score=None,
+        max_avg_latency_ms=None, max_p95_latency_ms=None, max_cost_budget=None,
+        regression_tolerance=0.05, regression_confidence=0.95,
+    )
+
+
+def _scored_run(scores: dict[str, float]) -> EvalRun:
+    return EvalRun(
+        dataset="d", model="m", provider="mock",
+        results=[
+            CaseResult(
+                case_id=cid, output="x",
+                metrics=[MetricResult(metric="similarity", score=s, passed=s >= 0.5)],
+            )
+            for cid, s in scores.items()
+        ],
+    )
+
+
+def test_significant_regression_fails_gate():
+    from cli import _evaluate_gates
+
+    baseline_scores = {f"c{i}": 1.0 for i in range(12)}
+    run = _scored_run({f"c{i}": 0.4 for i in range(12)})
+    code = _evaluate_gates(
+        run, _regression_args(), baseline={"avg_score": 1.0}, baseline_scores=baseline_scores
+    )
+    assert code == 1
+
+
+def test_tiny_drop_within_tolerance_passes_gate():
+    from cli import _evaluate_gates
+
+    baseline_scores = {f"c{i}": 0.80 for i in range(12)}
+    run = _scored_run({f"c{i}": 0.78 for i in range(12)})  # 0.02 drop < 0.05 tol
+    code = _evaluate_gates(
+        run, _regression_args(), baseline={"avg_score": 0.80}, baseline_scores=baseline_scores
+    )
+    assert code == 0
