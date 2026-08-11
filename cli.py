@@ -217,7 +217,8 @@ def build_parser() -> argparse.ArgumentParser:
     r.add_argument("--dataset", default="qa_golden.yaml",
                    help="A dataset file path, or a name in the packaged datasets/ dir")
     r.add_argument("--provider", default="mock",
-                   help="mock | mock-strong | mock-lite | mock-legacy | anthropic | openai | xai")
+                   help="mock | mock-strong | mock-lite | mock-legacy | anthropic | openai | "
+                        "xai | ollama (local, free) | openai-compat (any OpenAI-compatible URL)")
     r.add_argument("--judge-provider", default=None,
                    help="Separate provider for llm_judge/hallucination (avoids self-judging)")
     r.add_argument("--metrics", nargs="+",

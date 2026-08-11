@@ -50,11 +50,17 @@ def get_provider(
     elif name in ("xai", "grok"):
         from .xai_provider import XAIProvider
         inst = XAIProvider(use_cache=use_cache)
+    elif name in ("ollama", "local"):
+        from .local_provider import OllamaProvider
+        inst = OllamaProvider(use_cache=use_cache)
+    elif name in ("openai-compat", "compat"):
+        from .local_provider import OpenAICompatProvider
+        inst = OpenAICompatProvider(use_cache=use_cache)
     else:
         raise ValueError(
             f"Unknown provider: {name!r} "
             f"(try {', '.join(repr(k) for k in MOCK_PROVIDERS)}, "
-            f"'anthropic', 'openai', 'xai'/'grok')"
+            f"'anthropic', 'openai', 'xai'/'grok', 'ollama', 'openai-compat')"
         )
 
     # Upgrade to a persistent cache when requested (applied post-construction so
