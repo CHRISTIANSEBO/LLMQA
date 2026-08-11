@@ -22,6 +22,7 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import asynccontextmanager
 from pathlib import Path
+from urllib.request import urlopen
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
@@ -133,6 +134,49 @@ def _http_from_llmqa_error(exc: LLMQAError) -> HTTPException:
     return HTTPException(status_code=500, detail=str(exc))
 
 
+def _truthy(val: str | None) -> bool:
+    return (val or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+# Cache the Ollama reachability probe so /api/config (hit on page load +
+# prefetch) doesn't do a socket connect on every request.
+_OLLAMA_PROBE: dict[str, float | bool] = {"ts": 0.0, "ok": False}
+_OLLAMA_PROBE_TTL_S = 30.0
+
+
+def _ollama_reachable() -> bool:
+    """Best-effort check that a local Ollama server is up (short timeout, cached)."""
+    now = time.monotonic()
+    if _OLLAMA_PROBE["ts"] and now - float(_OLLAMA_PROBE["ts"]) < _OLLAMA_PROBE_TTL_S:
+        return bool(_OLLAMA_PROBE["ok"])
+    host = os.environ.get("OLLAMA_HOST", "http://localhost:11434").rstrip("/")
+    ok = False
+    try:
+        with urlopen(f"{host}/api/tags", timeout=0.5) as resp:  # noqa: S310 (fixed localhost URL)
+            ok = 200 <= getattr(resp, "status", 200) < 500
+    except Exception:
+        ok = False
+    _OLLAMA_PROBE.update(ts=now, ok=ok)
+    return ok
+
+
+def _local_providers() -> list[str]:
+    """Local / self-hosted providers to surface in the UI.
+
+    - ``ollama``: shown when ``LLMQA_ENABLE_OLLAMA`` is truthy or a local Ollama
+      server is reachable. It is free and key-free, so it is never gated by the
+      paid-provider guard.
+    - ``openai-compat``: shown when the operator has pointed it at an endpoint
+      via ``LLMQA_OPENAI_BASE_URL``.
+    """
+    out: list[str] = []
+    if _truthy(os.environ.get("LLMQA_ENABLE_OLLAMA")) or _ollama_reachable():
+        out.append("ollama")
+    if os.environ.get("LLMQA_OPENAI_BASE_URL"):
+        out.append("openai-compat")
+    return out
+
+
 # Provider instances are reused across requests so the in-memory response
 # cache actually pays off for the dashboard: repeated runs of the same golden
 # cases (or a judge re-asking an identical prompt) are served from cache
@@ -226,7 +270,8 @@ def health(deep: bool = False) -> dict:
         "providers_in_config": list(MOCK_PROVIDERS)
         + ( ["anthropic"] if os.environ.get("ANTHROPIC_API_KEY") else [] )
         + ( ["openai"] if os.environ.get("OPENAI_API_KEY") else [] )
-        + ( ["xai"] if os.environ.get("XAI_API_KEY") else [] ),
+        + ( ["xai"] if os.environ.get("XAI_API_KEY") else [] )
+        + _local_providers(),
     }
     if deep:
         # Cheap liveness probe: can we load the default dataset and does the
@@ -292,9 +337,10 @@ def config(dataset: str | None = None, include_context: bool = False) -> dict:
     if os.environ.get("XAI_API_KEY"):
         real_providers.append("xai")
 
+    local_providers = _local_providers()
     return {
-        "providers": list(MOCK_PROVIDERS) + real_providers,
-        "all_providers": list(MOCK_PROVIDERS) + ["anthropic", "openai", "xai"],
+        "providers": list(MOCK_PROVIDERS) + real_providers + local_providers,
+        "all_providers": list(MOCK_PROVIDERS) + ["anthropic", "openai", "xai"] + local_providers,
         "metrics": list(REGISTRY),
         "dataset": Path(dataset_path).name,
         "datasets": list_datasets(),
