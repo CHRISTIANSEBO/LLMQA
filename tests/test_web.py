@@ -209,3 +209,41 @@ def test_dashboard_reuses_provider_instance_across_runs():
 
     assert first is second, "dashboard must reuse the same provider instance"
     assert first._use_cache is True
+
+
+def test_ollama_surfaced_when_enabled(monkeypatch):
+    """The web UI must offer Ollama as a provider when it is enabled.
+
+    Ollama is free/local and key-free, so LLMQA_ENABLE_OLLAMA=1 should list it
+    in /api/config (both the usable `providers` and `all_providers`) without
+    needing a reachable server. It must never be blocked by the paid gate.
+    """
+    from llmqa.web import app as web_app
+
+    web_app._OLLAMA_PROBE.update(ts=0.0, ok=False)
+    monkeypatch.setenv("LLMQA_ENABLE_OLLAMA", "1")
+
+    cfg = client.get("/api/config").json()
+    assert "ollama" in cfg["providers"]
+    assert "ollama" in cfg["all_providers"]
+
+
+def test_openai_compat_surfaced_when_configured(monkeypatch):
+    """openai-compat should appear once an OpenAI-compatible base URL is set."""
+    monkeypatch.setenv("LLMQA_OPENAI_BASE_URL", "https://example.test/v1")
+    cfg = client.get("/api/config").json()
+    assert "openai-compat" in cfg["providers"]
+
+
+def test_local_providers_hidden_by_default(monkeypatch):
+    """No local providers leak into the mock-only demo when nothing is set."""
+    from llmqa.web import app as web_app
+
+    web_app._OLLAMA_PROBE.update(ts=0.0, ok=False)
+    monkeypatch.delenv("LLMQA_ENABLE_OLLAMA", raising=False)
+    monkeypatch.delenv("LLMQA_OPENAI_BASE_URL", raising=False)
+    monkeypatch.setattr(web_app, "_ollama_reachable", lambda: False)
+
+    cfg = client.get("/api/config").json()
+    assert "ollama" not in cfg["providers"]
+    assert "openai-compat" not in cfg["providers"]

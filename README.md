@@ -114,6 +114,13 @@ python -m llmqa.web         # http://localhost:8000  (or `python server.py` from
 export ANTHROPIC_API_KEY=...
 export OPENAI_API_KEY=...
 export XAI_API_KEY=...
+# Free & local: a running Ollama server is auto-detected and offered in the UI.
+# Force-list it (e.g. if the server starts later) or point at a remote host:
+export LLMQA_ENABLE_OLLAMA=1
+export OLLAMA_HOST=http://localhost:11434
+# Any OpenAI-compatible endpoint (OpenRouter, Together, vLLM, ...) appears in
+# the UI once you set its base URL:
+export LLMQA_OPENAI_BASE_URL=https://openrouter.ai/api/v1
 # Optional: persist the response cache across restarts
 export LLMQA_CACHE=.llmqa_cache.db
 ```
