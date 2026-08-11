@@ -146,6 +146,21 @@ LLMQA is packaged as a reusable composite Action, so a PR can be gated on qualit
 
 A ready-to-copy workflow lives at [.github/workflows/llmqa-example.yml](.github/workflows/llmqa-example.yml). You can also produce the same artifacts from the CLI with `--junit PATH` and `--github-annotations`.
 
+### Baseline snapshots (regression detection without a database)
+
+The SQLite store powers regression detection locally, but CI runners are ephemeral — there is no "previous run" to compare against. A **committed baseline file** fixes this the way snapshot testing does: you record expected per-case scores into a small JSON file, commit it, and gate every run against it. The file is diffable, so a change in expected quality is an explicit, reviewable edit in the PR rather than invisible state.
+
+```bash
+# 1) Record a baseline, then commit the file
+python cli.py run --provider mock --baseline baselines/qa.json --update-baseline
+git add baselines/qa.json && git commit -m "chore: record LLMQA baseline"
+
+# 2) Gate future runs against it (significance-aware; no DB needed)
+python cli.py run --provider mock --baseline baselines/qa.json --check-baseline
+```
+
+`--check-baseline` reuses the same paired-bootstrap significance test as the regression gate, so it fails only on a real, confident drop — not noise. It also warns when the dataset hash changed (an apples-to-oranges comparison) or when cases were added/removed versus the baseline.
+
 ## Datasets
 
 Six datasets ship in `datasets/` (78 cases total). Each case declares which metric(s) gate its pass/fail (see below).

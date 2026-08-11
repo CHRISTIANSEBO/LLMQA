@@ -21,6 +21,7 @@ from dotenv import load_dotenv
 load_dotenv()  # load .env if present
 
 from llmqa import __version__
+from llmqa.baseline import compare_to_baseline, load_baseline, write_baseline
 from llmqa.catalog import resolve_cli_dataset
 from llmqa.exceptions import LLMQAError
 from llmqa.metrics import build_metric
@@ -124,10 +125,20 @@ def cmd_run(args: argparse.Namespace) -> int:
                 scores = " ".join(f"{m.metric}={m.score:.2f}" for m in r.metrics)
                 print(f"::error title=LLMQA::{r.case_id} failed (gated on {gated}) — {scores}")
 
+    # Committed baseline snapshot: record it (and skip gating) when asked.
+    if getattr(args, "update_baseline", False):
+        if not args.baseline:
+            raise LLMQAError("--update-baseline requires --baseline PATH")
+        write_baseline(run, args.baseline)
+        print(f"\nBaseline written -> {args.baseline} ({len(run.results)} cases)")
+
     if not args.no_store:
         run_id = save_run(run, args.db, label=args.label)
         tag = f" [label={args.label}]" if args.label else ""
         print(f"Saved run #{run_id} to {args.db}{tag}")
+
+    if getattr(args, "update_baseline", False):
+        return 0  # recording a baseline is not a gated operation
 
     return _evaluate_gates(run, args, baseline, baseline_scores)
 
@@ -225,6 +236,24 @@ def _evaluate_gates(run, args, baseline, baseline_scores=None) -> int:
                     f"no regression vs baseline ({baseline['avg_score']:.2f} -> {run.avg_score:.2f})"
                 )
 
+    # 7) Committed baseline-file gate (works in ephemeral CI with no DB).
+    if getattr(args, "check_baseline", False):
+        if not getattr(args, "baseline", None):
+            failures.append("--check-baseline requires --baseline PATH")
+        else:
+            comparison = compare_to_baseline(
+                run, load_baseline(args.baseline),
+                tolerance=args.regression_tolerance,
+                confidence=getattr(args, "regression_confidence", 0.95),
+            )
+            for level, msg in comparison.lines():
+                if level == "fail":
+                    failures.append(f"baseline: {msg}")
+                elif level == "warn":
+                    print(f"\n⚠ baseline: {msg}")
+                else:
+                    oks.append(f"baseline: {msg}")
+
     # Surface any provider errors that were captured per case.
     errored = [r.case_id for r in run.results if getattr(r, "error", None)]
     if errored:
@@ -291,6 +320,15 @@ def build_parser() -> argparse.ArgumentParser:
                    help="Confidence level for the paired bootstrap CI used to decide if a "
                         "regression is statistically significant (default 0.95)")
     r.add_argument("--label", default=None, help="Tag this stored run with a label (e.g. baseline)")
+
+    # Committed baseline snapshot files (DB-free regression detection for CI).
+    r.add_argument("--baseline", default=None, metavar="PATH",
+                   help="Path to a committed baseline JSON snapshot file")
+    r.add_argument("--update-baseline", action="store_true",
+                   help="Write/refresh the baseline at --baseline from this run (does not gate)")
+    r.add_argument("--check-baseline", action="store_true",
+                   help="Gate this run against the --baseline file (significance-aware; "
+                        "works in ephemeral CI with no database)")
 
     # Storage / output.
     r.add_argument("--db", default="llmqa_runs.db")
