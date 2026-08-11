@@ -3,7 +3,21 @@ from __future__ import annotations
 
 from xml.sax.saxutils import escape, quoteattr
 
+from .stats import bootstrap_mean_ci
 from .types import EvalRun
+
+
+def _avg_score_line(run: EvalRun) -> str:
+    """``avg score`` line, annotated with a 95% bootstrap CI when N>=2.
+
+    The CI communicates how much to trust the number: a wide interval on a tiny
+    dataset is a warning that score deltas between runs may be noise.
+    """
+    obs = run.metric_observations()
+    if len(obs) >= 2:
+        lo, hi = bootstrap_mean_ci(obs)
+        return f"avg score : {run.avg_score:.2f}  (95% CI {lo:.2f}\u2013{hi:.2f})"
+    return f"avg score : {run.avg_score:.2f}"
 
 
 def to_console(run: EvalRun) -> str:
@@ -20,7 +34,7 @@ def to_console(run: EvalRun) -> str:
     lines += [
         "-" * 64,
         f"pass rate : {run.pass_rate:.0%}  ({sum(1 for r in run.results if r.passed)}/{len(run.results)})",
-        f"avg score : {run.avg_score:.2f}",
+        _avg_score_line(run),
         "by metric : " + ", ".join(f"{k}={v:.2f}" for k, v in run.score_by_metric().items()),
         f"latency   : avg {run.avg_latency_ms:.0f}ms  p95 {run.p95_latency_ms:.0f}ms",
         f"cost      : ${run.total_cost_usd:.4f}",
