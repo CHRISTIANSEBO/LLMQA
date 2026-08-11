@@ -3,8 +3,13 @@ from __future__ import annotations
 
 from xml.sax.saxutils import escape, quoteattr
 
+from . import __version__
 from .stats import bootstrap_mean_ci
 from .types import EvalRun
+
+# Hidden marker so a CI step can find and update its own sticky PR comment
+# instead of posting a new one on every push.
+PR_COMMENT_MARKER = "<!-- llmqa-report -->"
 
 
 def _avg_score_line(run: EvalRun) -> str:
@@ -62,6 +67,78 @@ def to_markdown(run: EvalRun) -> str:
         row = " | ".join(f"{by_name.get(n, 0):.2f}" for n in metric_names)
         md.append(f"| {r.case_id} | {'✅' if r.passed else '❌'} | {row} |")
     return "\n".join(md)
+
+
+def to_pr_comment(
+    run: EvalRun,
+    *,
+    passed: bool | None = None,
+    notes: list[str] | None = None,
+    title: str = "LLMQA",
+) -> str:
+    """Render a compact Markdown summary suited to a GitHub PR comment.
+
+    Leads with a pass/fail headline, a small KPI table, a per-metric line, and a
+    collapsible list of failing cases. ``passed`` (when given) sets the headline
+    badge from the CI gate outcome rather than the raw pass rate; ``notes`` are
+    extra status lines (e.g. gate/regression messages) shown under the table.
+    Begins with :data:`PR_COMMENT_MARKER` so a CI step can update its own sticky
+    comment in place.
+    """
+    n = len(run.results)
+    n_pass = sum(1 for r in run.results if r.passed)
+    failing = [r for r in run.results if not r.passed]
+
+    if passed is None:
+        badge = "✅ all passing" if not failing else f"❌ {len(failing)} failing"
+    else:
+        badge = "✅ gates passed" if passed else "❌ gates failed"
+
+    obs = run.metric_observations()
+    if len(obs) >= 2:
+        lo, hi = bootstrap_mean_ci(obs)
+        avg_cell = f"{run.avg_score:.2f} (95% CI {lo:.2f}–{hi:.2f})"
+    else:
+        avg_cell = f"{run.avg_score:.2f}"
+
+    lines = [
+        PR_COMMENT_MARKER,
+        f"### {title} — {badge}",
+        "",
+        "| Metric | Value |",
+        "|--------|-------|",
+        f"| Pass rate | {run.pass_rate:.0%} ({n_pass}/{n}) |",
+        f"| Avg score | {avg_cell} |",
+        f"| Latency | avg {run.avg_latency_ms:.0f}ms · p95 {run.p95_latency_ms:.0f}ms |",
+        f"| Cost | ${run.total_cost_usd:.4f} |",
+    ]
+    by_metric = run.score_by_metric()
+    if by_metric:
+        lines.append("")
+        lines.append("**By metric:** " + " · ".join(f"{k} {v:.2f}" for k, v in by_metric.items()))
+    for note in notes or []:
+        lines.append(f"\n- {note}")
+    if run.stopped_early:
+        lines.append(f"\n> ⚠ Run stopped early: {run.stopped_reason}")
+
+    if failing:
+        lines += [
+            "",
+            f"<details><summary>❌ {len(failing)} failing case(s)</summary>",
+            "",
+            "| Case | Gated on | Scores |",
+            "|------|----------|--------|",
+        ]
+        for r in failing:
+            gated = ", ".join(r.gate_metrics) if r.gate_metrics else "all metrics"
+            scores = " ".join(f"{m.metric}={m.score:.2f}" for m in r.metrics)
+            err = f" — {r.error}" if getattr(r, "error", None) else ""
+            lines.append(f"| {r.case_id} | {gated} | {scores}{err} |")
+        lines += ["", "</details>"]
+
+    ds = run.dataset.rsplit("/", 1)[-1]
+    lines += ["", f"<sub>🤖 LLMQA v{__version__} · {run.provider}/{run.model} · dataset `{ds}`</sub>"]
+    return "\n".join(lines)
 
 
 def to_junit(run: EvalRun, suite_name: str = "llmqa") -> str:

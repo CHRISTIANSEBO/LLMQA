@@ -13,7 +13,9 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import sys
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -26,7 +28,7 @@ from llmqa.catalog import resolve_cli_dataset
 from llmqa.exceptions import LLMQAError
 from llmqa.metrics import build_metric
 from llmqa.providers import get_provider
-from llmqa.report import to_console, to_junit, to_markdown
+from llmqa.report import to_console, to_junit, to_markdown, to_pr_comment
 from llmqa.runner import run_eval
 from llmqa.stats import paired_regression_verdict
 from llmqa.store import latest_run, latest_run_case_scores, save_run
@@ -140,11 +142,62 @@ def cmd_run(args: argparse.Namespace) -> int:
     if getattr(args, "update_baseline", False):
         return 0  # recording a baseline is not a gated operation
 
-    return _evaluate_gates(run, args, baseline, baseline_scores)
+    outcome = _run_gates(run, args, baseline, baseline_scores)
+    _print_gate_outcome(outcome)
+    _write_summary(run, args, outcome)
+    return outcome.code
+
+
+@dataclass
+class GateOutcome:
+    """Result of applying the configured gates: messages plus an exit code."""
+
+    oks: list[str] = field(default_factory=list)
+    failures: list[str] = field(default_factory=list)
+
+    @property
+    def code(self) -> int:
+        return 1 if self.failures else 0
+
+
+def _print_gate_outcome(outcome: GateOutcome) -> None:
+    for msg in outcome.oks:
+        print(f"\n\u2705 {msg}")
+    for msg in outcome.failures:
+        print(f"\n\u274c GATE FAILED: {msg}")
+
+
+def _write_summary(run, args, outcome: GateOutcome) -> None:
+    """Write the PR-comment Markdown summary to a file and/or the CI job summary.
+
+    ``--summary PATH`` writes a file (which the GitHub Action posts as a sticky
+    PR comment); ``--github-summary`` appends to ``$GITHUB_STEP_SUMMARY`` so the
+    results render natively on the workflow run page. Both are no-ops unless
+    requested, and the job-summary append is best-effort.
+    """
+    if not getattr(args, "summary", None) and not getattr(args, "github_summary", False):
+        return
+    notes = outcome.failures or outcome.oks
+    md = to_pr_comment(run, passed=outcome.code == 0, notes=notes)
+    if getattr(args, "summary", None):
+        Path(args.summary).write_text(md + "\n")
+        print(f"\nPR-comment summary -> {args.summary}")
+    if getattr(args, "github_summary", False):
+        step_summary = os.environ.get("GITHUB_STEP_SUMMARY")
+        if step_summary:
+            with open(step_summary, "a") as fh:
+                fh.write(md + "\n")
 
 
 def _evaluate_gates(run, args, baseline, baseline_scores=None) -> int:
-    """Apply every configured gate; return 0 if all pass, 1 if any fail."""
+    """Apply gates, print the outcome, and return 0/1. Thin wrapper for tests."""
+    outcome = _run_gates(run, args, baseline, baseline_scores)
+    _print_gate_outcome(outcome)
+    return outcome.code
+
+
+def _run_gates(run, args, baseline, baseline_scores=None) -> GateOutcome:
+    """Apply every configured gate and collect ok/failure messages (no printing)."""
     failures: list[str] = []
     oks: list[str] = []
 
@@ -259,12 +312,7 @@ def _evaluate_gates(run, args, baseline, baseline_scores=None) -> int:
     if errored:
         failures.append(f"provider errors on: {', '.join(errored)}")
 
-    for msg in oks:
-        print(f"\n\u2705 {msg}")
-    for msg in failures:
-        print(f"\n\u274c GATE FAILED: {msg}")
-
-    return 1 if failures else 0
+    return GateOutcome(oks=oks, failures=failures)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -342,6 +390,10 @@ def build_parser() -> argparse.ArgumentParser:
     r.add_argument("--junit", help="Write a JUnit XML report to this path (for CI test reporting)")
     r.add_argument("--github-annotations", action="store_true",
                    help="Emit ::error:: annotations for failing cases (GitHub Actions)")
+    r.add_argument("--summary", metavar="PATH",
+                   help="Write a compact Markdown summary (posted as a PR comment by the Action)")
+    r.add_argument("--github-summary", action="store_true",
+                   help="Append the Markdown summary to $GITHUB_STEP_SUMMARY (CI run page)")
     r.set_defaults(func=cmd_run)
     return p
 
