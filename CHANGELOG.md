@@ -4,6 +4,46 @@ All notable changes to LLMQA are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project aims
 to follow [Semantic Versioning](https://semver.org/).
 
+## [0.3.0] — 2026-08-11
+
+Theme: *from pass/fail to real evaluation* — make the harness statistically
+credible, able to run real models for free, and CI-native.
+
+### Added
+
+- **Local & OpenAI-compatible providers** for real evaluations without a paid
+  vendor key:
+  - `ollama` (alias `local`): evaluate against a local Ollama / LM Studio server
+    via its OpenAI-compatible API. No key required; cost reported as `$0`.
+    Configurable via `OLLAMA_HOST` and `LLMQA_LOCAL_MODEL`.
+  - `openai-compat` (alias `compat`): evaluate against **any** OpenAI-compatible
+    endpoint (OpenRouter, Together, Fireworks, vLLM, LM Studio, self-hosted
+    gateways) via `LLMQA_OPENAI_BASE_URL` + `LLMQA_OPENAI_API_KEY`, model from
+    `LLMQA_MODEL`, optional pricing via `LLMQA_PRICE_IN`/`LLMQA_PRICE_OUT`.
+- **Statistical significance on the regression gate** (`llmqa/stats.py`,
+  stdlib-only percentile bootstrap): a regression now requires **both** a
+  point-estimate drop beyond `--regression-tolerance` **and** a paired bootstrap
+  CI for `(current - baseline)` entirely below zero, so the gate stops firing on
+  noise. New `--regression-confidence` flag (default 0.95). The console
+  `avg score` line now shows a 95% bootstrap confidence interval.
+- **Committed baseline snapshot files** (`llmqa/baseline.py`) for DB-free
+  regression detection in ephemeral CI: `--baseline PATH` with
+  `--update-baseline` (record a diffable JSON snapshot) and `--check-baseline`
+  (significance-aware gate). Warns on dataset-hash changes and added/removed
+  cases.
+- **Pull-request results comment** from the GitHub Action: a sticky, in-place
+  comment with a pass/fail badge, KPI table (pass rate, avg score + CI, latency,
+  cost), per-metric scores, and a collapsible failing-cases table. New CLI
+  `--summary PATH` and `--github-summary` (writes the same Markdown to
+  `$GITHUB_STEP_SUMMARY`). New action inputs `comment-on-pr`, `github-token`,
+  `summary-path`.
+
+### Changed
+
+- Gate evaluation refactored into `GateOutcome` / `_run_gates()` so the PR
+  summary reflects the actual gate result (existing gate behavior unchanged).
+- `EvalRun` gains `case_scores()` and `metric_observations()` helpers.
+
 ## [0.2.0] — 2026-07-30
 
 ### Added

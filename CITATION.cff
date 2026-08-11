@@ -12,7 +12,7 @@ authors:
 repository-code: "https://github.com/CHRISTIANSEBO/LLMQA"
 url: "https://github.com/CHRISTIANSEBO/LLMQA"
 license: MIT
-version: "0.1.0"
+version: "0.3.0"
 keywords:
   - llm
   - evaluation
