@@ -129,7 +129,7 @@ API: `GET /api/health`, `GET /api/config`, `GET /api/history`, `GET /api/runs/{i
 
 ## Gate a pull request (GitHub Action)
 
-LLMQA is packaged as a reusable composite Action, so a PR can be gated on quality out of the box. It runs an evaluation, writes a JUnit XML report, and annotates failing cases inline on the diff.
+LLMQA is packaged as a reusable composite Action, so a PR can be gated on quality out of the box. It runs an evaluation, writes a JUnit XML report, annotates failing cases inline on the diff, and **posts a sticky results comment on the pull request** (pass rate with a confidence interval, per-metric scores, and a collapsible list of failing cases). The comment is updated in place on each push rather than piling up.
 
 ```yaml
 - name: LLMQA quality gate
@@ -144,7 +144,7 @@ LLMQA is packaged as a reusable composite Action, so a PR can be gated on qualit
   #   OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 ```
 
-A ready-to-copy workflow lives at [.github/workflows/llmqa-example.yml](.github/workflows/llmqa-example.yml). You can also produce the same artifacts from the CLI with `--junit PATH` and `--github-annotations`.
+The PR comment needs `permissions: pull-requests: write` on the job (set `comment-on-pr: "false"` to disable it). The same summary is also written to the workflow run's job-summary page. A ready-to-copy workflow lives at [.github/workflows/llmqa-example.yml](.github/workflows/llmqa-example.yml). You can also produce the same artifacts from the CLI with `--junit PATH` and `--github-annotations`.
 
 ### Baseline snapshots (regression detection without a database)
 
