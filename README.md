@@ -9,7 +9,7 @@
 
 **LLMQA** is an open-source harness that makes LLM quality measurable, reviewable, and gate-able in CI. It treats model outputs like software you can test: point it at a golden dataset, pick your metrics, and get a pass/fail report plus CI quality gates and regression detection, so a model or prompt change cannot silently degrade quality.
 
-It runs from the **CLI**, a **web dashboard**, or a **reusable GitHub Action**, and it is provider-agnostic (deterministic key-free mocks for CI, plus Anthropic, OpenAI, and xAI/Grok for real evaluations).
+It runs from the **CLI**, a **web dashboard**, or a **reusable GitHub Action**, and it is provider-agnostic (deterministic key-free mocks for CI, Anthropic, OpenAI, and xAI/Grok for hosted models, plus **local models via Ollama** and **any OpenAI-compatible endpoint** for free, self-hosted, real evaluations).
 
 > The hosted dashboard at the badge above is a **mock-only** showcase (no API keys, so it stays free and safe to share). Real-provider evaluation is intended to run **self-hosted**, where you supply your own keys.
 
@@ -183,6 +183,26 @@ export XAI_API_KEY=xai-...            ; python cli.py run --provider xai   # `gr
 
 xAI uses an OpenAI-compatible API, so it reuses the `openai` SDK against xAI's base URL with no extra dependency. Costs for every live provider are computed from the returned token usage using per-model pricing.
 
+### Local & OpenAI-compatible models (free, no vendor key)
+
+Evaluate **real** models without a paid key by pointing LLMQA at a local server or any OpenAI-compatible endpoint:
+
+```bash
+# Local model via Ollama (https://ollama.com) — free, offline, cost reported as $0
+ollama pull llama3.2
+LLMQA_LOCAL_MODEL=llama3.2 python cli.py run --provider ollama
+#   OLLAMA_HOST overrides the server URL (default http://localhost:11434)
+
+# Any OpenAI-compatible endpoint (OpenRouter, Together, Fireworks, vLLM, LM Studio, ...)
+export LLMQA_OPENAI_BASE_URL=https://openrouter.ai/api/v1
+export LLMQA_OPENAI_API_KEY=sk-...        # or reuse OPENAI_API_KEY
+export LLMQA_MODEL=meta-llama/llama-3.1-8b-instruct
+export LLMQA_PRICE_IN=0.05 LLMQA_PRICE_OUT=0.10   # optional, for accurate cost
+python cli.py run --provider openai-compat
+```
+
+Both reuse the `openai` SDK, so no extra dependency is needed. Ollama reports `$0` (local inference is free); `openai-compat` reports `$0` unless you supply `LLMQA_PRICE_IN`/`LLMQA_PRICE_OUT`.
+
 ## Production runner
 
 Built for real evaluations against paid providers:
@@ -201,7 +221,8 @@ Built for real evaluations against paid providers:
 python cli.py run [options]
 
   --dataset NAME|PATH        Packaged dataset name (e.g. qa_golden.yaml) or a file path
-  --provider NAME            mock | mock-strong | mock-lite | mock-legacy | anthropic | openai | xai/grok
+  --provider NAME            mock | mock-strong | mock-lite | mock-legacy | anthropic | openai |
+                             xai/grok | ollama (local, free) | openai-compat (any OpenAI URL)
   --judge-provider NAME      Separate model for llm_judge/hallucination
                              (avoids a model grading its own output)
   --metrics M [M ...]        exact_match similarity llm_judge hallucination

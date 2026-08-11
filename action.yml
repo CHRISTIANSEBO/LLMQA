@@ -6,7 +6,7 @@ branding:
 
 inputs:
   provider:
-    description: "Provider to evaluate (mock, mock-strong, anthropic, openai, xai)."
+    description: "Provider to evaluate (mock, mock-strong, anthropic, openai, xai, ollama, openai-compat)."
     required: false
     default: "mock"
   dataset:
