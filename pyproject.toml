@@ -104,10 +104,10 @@ ignore = ["E501", "B008"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["B011"]
-# cli.py and server.py deliberately call load_dotenv() before importing modules
-# that read env at import time, so their imports aren't at the very top.
+# cli.py and llmqa/web/__main__.py deliberately call load_dotenv() before
+# importing modules that read env at import time, so their imports aren't at
+# the very top. (server.py is a thin shim over __main__ and needs no exemption.)
 "cli.py" = ["E402"]
-"server.py" = ["E402"]
 "llmqa/web/__main__.py" = ["E402"]
 
 # pytest is configured in pytest.ini (it defines python_classes + pythonpath).
